@@ -1,0 +1,15 @@
+{
+  "_comment": "Edit this file to define your fleet. Each agent becomes one persistent Claude terminal bound to a role and a project directory. project_dir must exist.",
+  "agents": [
+    {
+      "name": "backend",
+      "role": "You are a senior backend engineer. Write clean, well-tested code, follow the existing project conventions, and prefer the standard library where reasonable.",
+      "project_dir": "~/projects/backend"
+    },
+    {
+      "name": "frontend",
+      "role": "You are a frontend engineer. Keep components small and accessible and match the existing design system.",
+      "project_dir": "~/projects/frontend"
+    }
+  ]
+}

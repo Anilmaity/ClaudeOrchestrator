@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Fleet</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1d212b; --line:#2a2f3a;
+    --txt:#e6e9ef; --dim:#9aa3b2; --accent:#7aa2ff;
+    --busy:#f0b429; --idle:#39d98a; --offline:#6b7280;
+    --pending:#9aa3b2; --running:#f0b429; --done:#39d98a; --failed:#ff5c5c; --canceled:#6b7280;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.5 system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--txt)}
+  header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
+  header h1{font-size:16px;margin:0;font-weight:600}
+  header .dot{width:8px;height:8px;border-radius:50%;background:var(--idle)}
+  header .sub{color:var(--dim);font-size:12px}
+  main{display:grid;grid-template-columns:340px 1fr;gap:16px;padding:16px;max-width:1300px;margin:0 auto}
+  h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:0 0 10px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
+  .agent{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:10px;background:var(--panel2)}
+  .agent .top{display:flex;align-items:center;justify-content:space-between}
+  .agent .name{font-weight:600}
+  .agent .role{color:var(--dim);font-size:12px;margin-top:4px}
+  .agent .path{color:var(--dim);font-size:11px;font-family:ui-monospace,monospace;margin-top:4px;word-break:break-all}
+  .agent .cur{font-size:12px;margin-top:6px;color:var(--accent)}
+  .badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;padding:2px 8px;border-radius:999px;background:#0c0e12;border:1px solid var(--line)}
+  .badge .d{width:7px;height:7px;border-radius:50%}
+  .b-busy .d{background:var(--busy)} .b-idle .d{background:var(--idle)} .b-offline .d{background:var(--offline)}
+  .pill{font-size:11px;padding:2px 8px;border-radius:999px;text-transform:capitalize}
+  .p-pending{background:#23262e;color:var(--pending)} .p-running{background:#3a2f12;color:var(--running)}
+  .p-done{background:#123422;color:var(--done)} .p-failed{background:#3a1414;color:var(--failed)} .p-canceled{background:#23262e;color:var(--canceled)}
+  label{display:block;font-size:12px;color:var(--dim);margin:8px 0 4px}
+  select,textarea,input{width:100%;background:#0c0e12;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:9px;font:inherit}
+  textarea{resize:vertical;min-height:80px}
+  button{cursor:pointer;border:1px solid var(--line);background:var(--panel2);color:var(--txt);border-radius:8px;padding:8px 12px;font:inherit}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#0c1020;font-weight:600;width:100%;margin-top:10px}
+  button.mini{padding:3px 8px;font-size:11px}
+  table{width:100%;border-collapse:collapse}
+  th,td{text-align:left;padding:8px 8px;border-bottom:1px solid var(--line);vertical-align:top;font-size:13px}
+  th{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+  td.desc{max-width:420px;color:var(--txt)}
+  .muted{color:var(--dim)}
+  .row-actions{display:flex;gap:6px}
+  /* modal */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;padding:20px}
+  .modal.open{display:flex}
+  .modal .box{background:var(--panel);border:1px solid var(--line);border-radius:10px;width:min(900px,100%);max-height:85vh;display:flex;flex-direction:column}
+  .modal .hd{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}
+  .modal pre{margin:0;padding:16px;overflow:auto;font:12px/1.5 ui-monospace,monospace;color:#d6dbe6;white-space:pre-wrap;word-break:break-word}
+  @media(max-width:820px){main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <span class="dot" id="livedot"></span>
+  <h1>Claude Fleet</h1>
+  <span class="sub" id="summary">loading…</span>
+</header>
+
+<main>
+  <section>
+    <div class="card">
+      <h2>New task</h2>
+      <label for="agent">Agent</label>
+      <select id="agent"></select>
+      <label for="desc">Task</label>
+      <textarea id="desc" placeholder="Describe what this agent should do…"></textarea>
+      <button class="primary" id="addBtn">Queue task</button>
+    </div>
+    <div class="card">
+      <h2>Agents</h2>
+      <div id="agents"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="card">
+      <h2>Tasks</h2>
+      <table>
+        <thead><tr><th>ID</th><th>Agent</th><th>Status</th><th>Task</th><th></th></tr></thead>
+        <tbody id="tasks"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<div class="modal" id="modal">
+  <div class="box">
+    <div class="hd"><strong id="modalTitle">Log</strong><button class="mini" onclick="closeModal()">close</button></div>
+    <pre id="modalBody">…</pre>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+let agentsCache = [];
+
+async function api(path, opts){ const r = await fetch(path, opts); return r.json(); }
+
+function badge(act){ return `<span class="badge b-${act}"><span class="d"></span>${act}</span>`; }
+function pill(s){ return `<span class="pill p-${s}">${s}</span>`; }
+function esc(x){ return (x||"").replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+function renderAgents(agents){
+  agentsCache = agents;
+  $("#agents").innerHTML = agents.map(a => `
+    <div class="agent">
+      <div class="top"><span class="name">${esc(a.name)}</span>${badge(a.activity)}</div>
+      <div class="role">${esc(a.role)||'<span class="muted">no role set</span>'}</div>
+      <div class="path">${esc(a.project_dir)}</div>
+      ${a.current_task ? `<div class="cur">▶ ${a.current_task}: ${esc(a.current_desc||'')}</div>` : ''}
+      <div class="row-actions" style="margin-top:8px">
+        <button class="mini" onclick="liveLog('${a.name}')">live log</button>
+        <button class="mini" onclick="restart('${a.name}')">restart</button>
+      </div>
+    </div>`).join("");
+  // keep the agent dropdown in sync
+  const sel = $("#agent"), prev = sel.value;
+  sel.innerHTML = agents.map(a=>`<option value="${esc(a.name)}">${esc(a.name)}</option>`).join("");
+  if ([...sel.options].some(o=>o.value===prev)) sel.value = prev;
+}
+
+function renderTasks(tasks){
+  $("#tasks").innerHTML = tasks.map(t => `
+    <tr>
+      <td>${t.id}</td>
+      <td>${esc(t.agent)}</td>
+      <td>${pill(t.status)}</td>
+      <td class="desc">${esc(t.description)}</td>
+      <td><div class="row-actions">
+        <button class="mini" onclick="taskLog('${t.id}')">log</button>
+        ${t.status==='pending' ? `<button class="mini" onclick="cancel('${t.id}')">cancel</button>`:''}
+      </div></td>
+    </tr>`).join("") || `<tr><td colspan="5" class="muted">No tasks yet.</td></tr>`;
+}
+
+async function refresh(){
+  try{
+    const s = await api("/api/state");
+    renderAgents(s.agents); renderTasks(s.tasks);
+    const counts = s.tasks.reduce((m,t)=>(m[t.status]=(m[t.status]||0)+1,m),{});
+    $("#summary").textContent =
+      `${s.agents.length} agents · ${counts.running||0} running · ${counts.pending||0} pending · ${counts.done||0} done`;
+    $("#livedot").style.background = "var(--idle)";
+  }catch(e){ $("#livedot").style.background = "var(--failed)"; }
+}
+
+$("#addBtn").onclick = async () => {
+  const agent = $("#agent").value, description = $("#desc").value.trim();
+  if(!description) return;
+  const r = await api("/api/tasks", {method:"POST", headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({agent, description})});
+  if(r.error){ alert(r.error); return; }
+  $("#desc").value = ""; refresh();
+};
+
+async function cancel(id){ await api("/api/task/cancel",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); refresh(); }
+async function restart(name){ if(!confirm("Restart agent "+name+"?")) return;
+  await api("/api/agent/restart",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({name})}); refresh(); }
+
+function openModal(title, text){ $("#modalTitle").textContent=title; $("#modalBody").textContent=text||"(empty)"; $("#modal").classList.add("open"); }
+function closeModal(){ $("#modal").classList.remove("open"); }
+async function taskLog(id){ const r=await api("/api/task/log?id="+encodeURIComponent(id)); openModal("Task "+id+" log", r.text); }
+async function liveLog(name){ const r=await api("/api/logs?agent="+encodeURIComponent(name)+"&lines=300"); openModal("Live: "+name, r.text); }
+
+$("#modal").addEventListener("click", e=>{ if(e.target.id==="modal") closeModal(); });
+refresh(); setInterval(refresh, 2500);
+</script>
+</body>
+</html>

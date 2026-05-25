@@ -40,6 +40,27 @@ tmux session named `corch`; each worker is a window named after the worker.
    `stop` it (or give it the next task with `send`).
 6. Keep the human informed: report which workers are running, busy, or done.
 
+## Fleet mode (persistent agents + dashboard)
+
+For ongoing work there is a second, higher-level tool: `./fleet`. It reads
+`fleet.json` (a defined roster of named agents, each with a `role` and a
+`project_dir`), keeps one persistent Claude terminal per agent, and runs an
+auto-dispatcher plus a web dashboard.
+
+| Command | What it does |
+|---|---|
+| `./fleet up [--host H] [--port P]` | Start every agent in `fleet.json`, the dispatcher, and the dashboard (blocks). |
+| `./fleet status` | Print agents (idle/busy) and the task queue/history. |
+| `./fleet add NAME "task"` | Queue a task for an agent — the running dispatcher picks it up when that agent is idle. |
+| `./fleet cancel ID` | Cancel a pending task. |
+| `./fleet down` | Stop all agent terminals. |
+
+Use `./orch` when the human wants ad-hoc, one-off workers on arbitrary
+directories. Use `./fleet` when they have a stable set of agents/projects and
+want to keep queuing tasks with a dashboard. If `./fleet up` is already running,
+you can queue work for it with `./fleet add` and report status with
+`./fleet status`.
+
 ## Guardrails
 
 - Don't spawn a worker on a directory that isn't a real project the human named.

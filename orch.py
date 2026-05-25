@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -41,13 +42,6 @@ BUSY_MARKERS = ("esc to interrupt", "interrupt)")
 TRUST_MARKERS = ("do you trust", "trust the files")
 # One-time "Bypass Permissions mode" acceptance; option 2 is "Yes, I accept".
 BYPASS_MARKER = "yes, i accept"
-# Sanitize the worker shell before launch: claude refuses to run inside a
-# Python venv, and an inherited venv on PATH would shadow the worker's own
-# interpreter. Strip the venv bin from PATH and clear VIRTUAL_ENV.
-LAUNCH_CMD = (
-    r'[ -n "$VIRTUAL_ENV" ] && export PATH="${PATH//$VIRTUAL_ENV\/bin:/}"; '
-    r"unset VIRTUAL_ENV; claude --dangerously-skip-permissions"
-)
 # Marker we instruct workers to print when finished.
 DONE_MARKER = "worker-done"
 
@@ -168,6 +162,46 @@ def _wait_ready(name: str, timeout: float = 40.0) -> bool:
     return False
 
 
+# A tiny launcher script run *directly* as the tmux window's process. Running
+# claude this way (instead of typing a command into an interactive shell) avoids
+# shell-startup races, dropped characters, and command-quoting problems. It also
+# sanitizes the inherited Python venv (claude refuses to start inside one) and
+# reads the optional role from a file, so no role text needs shell-quoting.
+LAUNCHER = STATE_DIR / "agent-launch.sh"
+_LAUNCHER_BODY = (
+    "#!/usr/bin/env bash\n"
+    '[ -n "$VIRTUAL_ENV" ] && export PATH="${PATH//$VIRTUAL_ENV\\/bin:/}"\n'
+    "unset VIRTUAL_ENV\n"
+    'role="$(cat "$1" 2>/dev/null)"\n'
+    'if [ -n "$role" ]; then\n'
+    '  exec claude --dangerously-skip-permissions --append-system-prompt "$role"\n'
+    "else\n"
+    "  exec claude --dangerously-skip-permissions\n"
+    "fi\n"
+)
+
+
+def _ensure_launcher() -> None:
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    if not LAUNCHER.exists() or LAUNCHER.read_text() != _LAUNCHER_BODY:
+        LAUNCHER.write_text(_LAUNCHER_BODY)
+    LAUNCHER.chmod(0o755)
+
+
+def _spawn_window(name: str, project_dir: str, role_file: str = "",
+                  ready_timeout: float = 45.0) -> tuple[bool, str]:
+    """Create a tmux window running claude directly. Returns (ready, error)."""
+    _ensure_launcher()
+    cmd = f"bash {shlex.quote(str(LAUNCHER))} {shlex.quote(role_file)}"
+    if not _session_exists():
+        r = _tmux("new-session", "-d", "-s", SESSION, "-n", name, "-c", project_dir, cmd)
+    else:
+        r = _tmux("new-window", "-t", SESSION, "-n", name, "-c", project_dir, cmd)
+    if r.returncode != 0:
+        return False, r.stderr.strip()
+    return _wait_ready(name, ready_timeout), ""
+
+
 # --------------------------------------------------------------------------- #
 # commands
 # --------------------------------------------------------------------------- #
@@ -196,19 +230,11 @@ def cmd_spawn(a: argparse.Namespace) -> None:
     task_path = TASKS_DIR / f"{name}.md"
     task_path.write_text(task)
 
-    # create the window (and session if needed), starting in the project dir
-    if not _session_exists():
-        r = _tmux("new-session", "-d", "-s", SESSION, "-n", name, "-c", str(proj))
-    else:
-        r = _tmux("new-window", "-t", SESSION, "-n", name, "-c", str(proj))
-    if r.returncode != 0:
-        _die(f"failed to create tmux window: {r.stderr.strip()}")
-
-    # launch the autonomous claude TUI inside the window (venv-sanitized)
-    _tmux("send-keys", "-t", _target(name), "-l", "--", LAUNCH_CMD)
-    _tmux("send-keys", "-t", _target(name), "Enter")
-
-    if not _wait_ready(name):
+    # create a window running claude directly (no role for one-off workers)
+    ready, err = _spawn_window(name, str(proj))
+    if err:
+        _die(f"failed to create tmux window: {err}")
+    if not ready:
         print(f"warning: {name} TUI not confirmed ready; sending task anyway",
               file=sys.stderr)
 
