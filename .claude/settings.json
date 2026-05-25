@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./orch:*)",
+      "Bash(python3 orch.py:*)",
+      "Bash(tmux:*)"
+    ]
+  }
+}

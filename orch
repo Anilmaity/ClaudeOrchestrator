@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Thin wrapper so you can run `./orch ...` from anywhere in the project.
+exec python3 "$(dirname "$(readlink -f "$0")")/orch.py" "$@"
