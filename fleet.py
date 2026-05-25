@@ -11,6 +11,7 @@ when that agent is idle, then watches for completion.
   ./fleet up            start agents + dispatcher + dashboard (blocks)
   ./fleet status        print agents and tasks
   ./fleet add NAME "…"  queue a task for an agent
+  ./fleet send NAME "…" send a message straight to a live agent (steer / answer)
   ./fleet cancel ID     cancel a pending task
   ./fleet down          stop all agent terminals
 
@@ -106,6 +107,33 @@ def agent_activity(name: str) -> str:
         return "offline"
     low = orch._capture(name, 80).lower()
     return "busy" if any(m in low for m in orch.BUSY_MARKERS) else "idle"
+
+
+# Heuristic markers that the agent has paused to ask the human something and is
+# waiting on a numbered choice or a yes/no — display-only, never used by the
+# dispatcher (which keys off busy/idle alone).
+ATTENTION_MARKERS = (
+    "do you want", "do you trust", "❯ 1.", "1. yes", "2. no",
+    "would you like", "(y/n)", "press enter to", "waiting for your",
+)
+
+
+def agent_attention(name: str) -> bool:
+    """True when an idle agent looks like it's blocked on a question for you."""
+    if not orch._window_exists(name):
+        return False
+    low = orch._capture(name, 40).lower()
+    if any(m in low for m in orch.BUSY_MARKERS):
+        return False
+    return any(m in low for m in ATTENTION_MARKERS)
+
+
+def send_message(name: str, text: str) -> bool:
+    """Type a message straight into a live agent's prompt. Returns success."""
+    if not orch._window_exists(name):
+        return False
+    orch._send_text(name, text)
+    return True
 
 
 def agent_ready(name: str) -> bool:
@@ -209,7 +237,27 @@ class Dispatcher(threading.Thread):
                 print(f"[dispatch] error: {e}", file=sys.stderr)
             self.stop.wait(POLL)
 
+    def _reload_agents(self) -> None:
+        """Re-read fleet.json so edits (new/removed agents) take effect live.
+
+        Updates both this dispatcher's view and the module-level AGENTS that the
+        dashboard renders from. A malformed file mid-edit (load_config may even
+        call sys.exit) must never kill the dispatcher, so swallow everything and
+        keep the last good roster.
+        """
+        global AGENTS
+        try:
+            agents = load_config()
+        except BaseException as e:  # incl. SystemExit from validation
+            print(f"[dispatch] fleet.json reload skipped: {e}", file=sys.stderr)
+            return
+        self.agents = {a["name"]: a for a in agents}
+        AGENTS = agents
+
     def tick(self) -> None:
+        # 0) hot-reload fleet.json so agents added/removed while running show up
+        self._reload_agents()
+
         # 1) keep terminals alive (outside the lock; may block on readiness)
         for a in self.agents.values():
             if not orch._window_exists(a["name"]):
@@ -282,11 +330,14 @@ def build_state() -> dict:
     agents = []
     for a in AGENTS:
         cur = running.get(a["name"])
+        act = agent_activity(a["name"])
         agents.append({
             "name": a["name"], "role": a["role"], "project_dir": a["project_dir"],
-            "activity": agent_activity(a["name"]),
+            "activity": act,
+            "attention": act == "idle" and agent_attention(a["name"]),
             "current_task": cur["id"] if cur else None,
             "current_desc": cur["description"] if cur else None,
+            "current_started": cur["started_at"] if cur else None,
         })
     tasks = list(reversed(d["tasks"]))[:200]
     return {"agents": agents, "tasks": tasks}
@@ -357,6 +408,14 @@ class Handler(BaseHTTPRequestHandler):
         elif u.path == "/api/task/cancel":
             ok = cancel_task((body.get("id") or "").strip())
             self._json({"ok": ok})
+        elif u.path == "/api/agent/send":
+            name = (body.get("name") or "").strip()
+            msg = (body.get("message") or "").strip()
+            if name not in {a["name"] for a in AGENTS}:
+                return self._json({"error": "unknown agent"}, 400)
+            if not msg:
+                return self._json({"error": "empty message"}, 400)
+            self._json({"ok": send_message(name, msg)})
         elif u.path == "/api/agent/restart":
             name = (body.get("name") or "").strip()
             if orch._window_exists(name):
@@ -426,6 +485,16 @@ def cmd_add(a: argparse.Namespace) -> None:
     print(f"queued {add_task(a.agent, a.task)} for {a.agent}")
 
 
+def cmd_send(a: argparse.Namespace) -> None:
+    agents = {x["name"] for x in load_config()}
+    if a.agent not in agents:
+        orch._die(f"unknown agent {a.agent!r}. Known: {', '.join(sorted(agents))}")
+    if send_message(a.agent, a.message):
+        print(f"sent to {a.agent}: {a.message}")
+    else:
+        orch._die(f"agent {a.agent!r} is offline (start it with './fleet up')")
+
+
 def cmd_cancel(a: argparse.Namespace) -> None:
     print("canceled" if cancel_task(a.id) else "not found or not pending")
 
@@ -454,6 +523,11 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("agent")
     s.add_argument("task")
     s.set_defaults(func=cmd_add)
+
+    s = sub.add_parser("send", help="send a message straight to a live agent")
+    s.add_argument("agent")
+    s.add_argument("message")
+    s.set_defaults(func=cmd_send)
 
     s = sub.add_parser("cancel", help="cancel a pending task")
     s.add_argument("id")

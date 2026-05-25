@@ -38,8 +38,12 @@ REGISTRY = STATE_DIR / "workers.json"
 READY_MARKERS = ("shift+tab to cycle", "for shortcuts")
 # Text shown while Claude is actively working on a turn.
 BUSY_MARKERS = ("esc to interrupt", "interrupt)")
-# Folder-trust dialog we auto-accept (default option) so spawning is hands-off.
-TRUST_MARKERS = ("do you trust", "trust the files")
+# Folder-trust dialog we auto-accept (default option = trust) so spawning is
+# hands-off. Wording varies across versions, so match several phrasings.
+TRUST_MARKERS = (
+    "do you trust", "trust the files", "trust this folder",
+    "is this a project you", "quick safety check",
+)
 # One-time "Bypass Permissions mode" acceptance; option 2 is "Yes, I accept".
 BYPASS_MARKER = "yes, i accept"
 # Marker we instruct workers to print when finished.

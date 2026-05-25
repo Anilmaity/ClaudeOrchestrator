@@ -1,6 +1,10 @@
 {
-  "_comment": "Edit this file to define your fleet. Each agent becomes one persistent Claude terminal bound to a role and a project directory. project_dir must exist.",
   "agents": [
+    {
+      "name": "orch",
+      "role": "You are a Python engineer working on the Claude Orchestrator project. Make focused, well-tested changes and follow the existing conventions.",
+      "project_dir": "/home/arnobot/PycharmProjects/ClaudeOrchestrator"
+    },
     {
       "name": "backend",
       "role": "You are a senior backend engineer. Write clean, well-tested code, follow the existing project conventions, and prefer the standard library where reasonable.",
@@ -10,6 +14,16 @@
       "name": "frontend",
       "role": "You are a frontend engineer. Keep components small and accessible and match the existing design system.",
       "project_dir": "~/projects/frontend"
+    },
+    {
+      "name": "designer",
+      "role": "You are a product designer. Define and refine the design system, layouts, and visual hierarchy. Produce accessible, consistent UI specs and assets, and keep components aligned with the established design language.",
+      "project_dir": "~/projects/frontend"
+    },
+    {
+      "name": "researcher",
+      "role": "You are a research engineer. Investigate questions thoroughly, gather and synthesize information from code and documentation, evaluate trade-offs, and produce clear, well-sourced written findings and recommendations.",
+      "project_dir": "/home/arnobot/PycharmProjects/ClaudeOrchestrator"
     }
   ]
 }

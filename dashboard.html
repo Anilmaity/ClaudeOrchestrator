@@ -8,7 +8,7 @@
   :root{
     --bg:#0f1115; --panel:#171a21; --panel2:#1d212b; --line:#2a2f3a;
     --txt:#e6e9ef; --dim:#9aa3b2; --accent:#7aa2ff;
-    --busy:#f0b429; --idle:#39d98a; --offline:#6b7280;
+    --busy:#f0b429; --idle:#39d98a; --offline:#6b7280; --attn:#ff5c5c;
     --pending:#9aa3b2; --running:#f0b429; --done:#39d98a; --failed:#ff5c5c; --canceled:#6b7280;
   }
   *{box-sizing:border-box}
@@ -29,6 +29,12 @@
   .badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;padding:2px 8px;border-radius:999px;background:#0c0e12;border:1px solid var(--line)}
   .badge .d{width:7px;height:7px;border-radius:50%}
   .b-busy .d{background:var(--busy)} .b-idle .d{background:var(--idle)} .b-offline .d{background:var(--offline)}
+  .agent.attn{border-color:var(--attn);box-shadow:0 0 0 1px var(--attn) inset}
+  .b-attn{border-color:var(--attn);color:var(--attn)} .b-attn .d{background:var(--attn);animation:blink 1s steps(2,start) infinite}
+  @keyframes blink{50%{opacity:.25}}
+  .elapsed{color:var(--dim);font-size:11px;font-variant-numeric:tabular-nums}
+  .reply{display:flex;gap:6px;margin-top:8px}
+  .reply input{flex:1;padding:6px 8px;font-size:12px}
   .pill{font-size:11px;padding:2px 8px;border-radius:999px;text-transform:capitalize}
   .p-pending{background:#23262e;color:var(--pending)} .p-running{background:#3a2f12;color:var(--running)}
   .p-done{background:#123422;color:var(--done)} .p-failed{background:#3a1414;color:var(--failed)} .p-canceled{background:#23262e;color:var(--canceled)}
@@ -80,7 +86,7 @@
     <div class="card">
       <h2>Tasks</h2>
       <table>
-        <thead><tr><th>ID</th><th>Agent</th><th>Status</th><th>Task</th><th></th></tr></thead>
+        <thead><tr><th>ID</th><th>Agent</th><th>Status</th><th>Time</th><th>Task</th><th></th></tr></thead>
         <tbody id="tasks"></tbody>
       </table>
     </div>
@@ -104,14 +110,29 @@ function badge(act){ return `<span class="badge b-${act}"><span class="d"></span
 function pill(s){ return `<span class="pill p-${s}">${s}</span>`; }
 function esc(x){ return (x||"").replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 
+// "1m 20s" style duration between two ISO times (or now if `to` is null).
+function dur(from, to){
+  if(!from) return "";
+  const s = Math.max(0, Math.round(((to?Date.parse(to):Date.now()) - Date.parse(from))/1000));
+  if(s < 60) return s+"s";
+  const m = Math.floor(s/60); if(m < 60) return m+"m "+(s%60)+"s";
+  const h = Math.floor(m/60); return h+"h "+(m%60)+"m";
+}
+
 function renderAgents(agents){
   agentsCache = agents;
   $("#agents").innerHTML = agents.map(a => `
-    <div class="agent">
-      <div class="top"><span class="name">${esc(a.name)}</span>${badge(a.activity)}</div>
+    <div class="agent${a.attention?' attn':''}">
+      <div class="top"><span class="name">${esc(a.name)}</span>
+        ${a.attention ? '<span class="badge b-attn"><span class="d"></span>needs you</span>' : badge(a.activity)}</div>
       <div class="role">${esc(a.role)||'<span class="muted">no role set</span>'}</div>
       <div class="path">${esc(a.project_dir)}</div>
-      ${a.current_task ? `<div class="cur">▶ ${a.current_task}: ${esc(a.current_desc||'')}</div>` : ''}
+      ${a.current_task ? `<div class="cur">▶ ${a.current_task}: ${esc(a.current_desc||'')}
+        <span class="elapsed" data-since="${a.current_started||''}">${a.current_started?'· '+dur(a.current_started,null):''}</span></div>` : ''}
+      <div class="reply">
+        <input placeholder="message ${esc(a.name)}…" onkeydown="if(event.key==='Enter')sendMsg('${a.name}',this)">
+        <button class="mini" onclick="sendMsg('${a.name}',this.previousElementSibling)">send</button>
+      </div>
       <div class="row-actions" style="margin-top:8px">
         <button class="mini" onclick="liveLog('${a.name}')">live log</button>
         <button class="mini" onclick="restart('${a.name}')">restart</button>
@@ -123,29 +144,57 @@ function renderAgents(agents){
   if ([...sel.options].some(o=>o.value===prev)) sel.value = prev;
 }
 
+function taskTime(t){
+  if(t.status==='running') return t.started_at ? dur(t.started_at,null) : '';
+  if(t.finished_at && (t.started_at||t.created_at)) return dur(t.started_at||t.created_at, t.finished_at);
+  return '';
+}
+
 function renderTasks(tasks){
   $("#tasks").innerHTML = tasks.map(t => `
     <tr>
       <td>${t.id}</td>
       <td>${esc(t.agent)}</td>
       <td>${pill(t.status)}</td>
+      <td class="elapsed" data-running="${t.status==='running'?(t.started_at||''):''}">${taskTime(t)}</td>
       <td class="desc">${esc(t.description)}</td>
       <td><div class="row-actions">
         <button class="mini" onclick="taskLog('${t.id}')">log</button>
         ${t.status==='pending' ? `<button class="mini" onclick="cancel('${t.id}')">cancel</button>`:''}
       </div></td>
-    </tr>`).join("") || `<tr><td colspan="5" class="muted">No tasks yet.</td></tr>`;
+    </tr>`).join("") || `<tr><td colspan="6" class="muted">No tasks yet.</td></tr>`;
+}
+
+// Is the user mid-edit inside an agent reply box? If so, don't re-render the
+// agents column out from under them on the next poll.
+function typingInAgents(){
+  const el = document.activeElement;
+  return el && el.tagName === "INPUT" && el.closest("#agents");
 }
 
 async function refresh(){
   try{
     const s = await api("/api/state");
-    renderAgents(s.agents); renderTasks(s.tasks);
+    if(!typingInAgents()) renderAgents(s.agents);
+    renderTasks(s.tasks);
     const counts = s.tasks.reduce((m,t)=>(m[t.status]=(m[t.status]||0)+1,m),{});
+    const attn = s.agents.filter(a=>a.attention).length;
     $("#summary").textContent =
-      `${s.agents.length} agents · ${counts.running||0} running · ${counts.pending||0} pending · ${counts.done||0} done`;
+      `${s.agents.length} agents · ${counts.running||0} running · ${counts.pending||0} pending · ${counts.done||0} done`
+      + (attn ? ` · ⚠ ${attn} need${attn>1?'':'s'} you` : "");
+    document.title = (attn?`(${attn}) `:"") + "Claude Fleet";
     $("#livedot").style.background = "var(--idle)";
   }catch(e){ $("#livedot").style.background = "var(--failed)"; }
+}
+
+// Tick elapsed-time labels every second so durations advance between polls.
+function tick(){
+  document.querySelectorAll('.cur .elapsed[data-since]').forEach(el=>{
+    if(el.dataset.since) el.textContent = "· " + dur(el.dataset.since, null);
+  });
+  document.querySelectorAll('td.elapsed[data-running]').forEach(el=>{
+    if(el.dataset.running) el.textContent = dur(el.dataset.running, null);
+  });
 }
 
 $("#addBtn").onclick = async () => {
@@ -157,6 +206,13 @@ $("#addBtn").onclick = async () => {
   $("#desc").value = ""; refresh();
 };
 
+async function sendMsg(name, input){
+  const message = input.value.trim();
+  if(!message) return;
+  const r = await api("/api/agent/send",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({name,message})});
+  if(r.error){ alert(r.error); return; }
+  input.value = ""; refresh();
+}
 async function cancel(id){ await api("/api/task/cancel",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); refresh(); }
 async function restart(name){ if(!confirm("Restart agent "+name+"?")) return;
   await api("/api/agent/restart",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({name})}); refresh(); }
@@ -167,7 +223,10 @@ async function taskLog(id){ const r=await api("/api/task/log?id="+encodeURICompo
 async function liveLog(name){ const r=await api("/api/logs?agent="+encodeURIComponent(name)+"&lines=300"); openModal("Live: "+name, r.text); }
 
 $("#modal").addEventListener("click", e=>{ if(e.target.id==="modal") closeModal(); });
-refresh(); setInterval(refresh, 2500);
+// Ctrl/Cmd+Enter queues the task from the description box.
+$("#desc").addEventListener("keydown", e=>{ if((e.ctrlKey||e.metaKey)&&e.key==="Enter") $("#addBtn").click(); });
+document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeModal(); });
+refresh(); setInterval(refresh, 2500); setInterval(tick, 1000);
 </script>
 </body>
 </html>
