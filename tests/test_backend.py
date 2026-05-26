@@ -23,3 +23,10 @@ def test_unknown_backend_raises(monkeypatch):
     monkeypatch.setenv("ORCH_BACKEND", "nope")
     with __import__("pytest").raises(ValueError):
         backend.get_backend()
+
+def test_tmux_available_uses_which(monkeypatch):
+    import tmux_backend
+    monkeypatch.setattr(tmux_backend.shutil, "which", lambda n: None)
+    assert tmux_backend.TmuxBackend().available() is False
+    monkeypatch.setattr(tmux_backend.shutil, "which", lambda n: "/usr/bin/tmux")
+    assert tmux_backend.TmuxBackend().available() is True
