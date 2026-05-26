@@ -3,115 +3,64 @@
 orch.py — Claude Orchestrator control CLI.
 
 Drives multiple autonomous `claude` workers, each running in its own visible
-tmux window inside a single tmux session (default: "corch"). A "manager"
-Claude session calls this CLI to spawn, monitor, message, and stop workers.
+terminal window (tmux on Linux/Mac, ConPTY on Windows) inside a single session.
+A "manager" Claude session calls this CLI to spawn, monitor, message, and stop
+workers.
 
 Design choices (see CLAUDE.md):
-  * Each worker is a real, attachable terminal -> tmux window.
+  * Each worker is a real, attachable terminal.
   * Workers are fully autonomous -> `claude --dangerously-skip-permissions`.
   * Each worker works in its own project directory (no shared worktree).
   * Task text lives in a file the worker is told to read, so we never have to
     shell-quote long/multiline prompts.
 
-Stdlib only. Python 3.8+.
+Stdlib only (except the pluggable backend). Python 3.8+.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import re
-import shlex
-import shutil
-import subprocess
 import sys
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 
-SESSION = "corch"
-STATE_DIR = Path.home() / ".claude-orch"
-TASKS_DIR = STATE_DIR / "tasks"
-REGISTRY = STATE_DIR / "workers.json"
+import common
+from common import (SESSION, STATE_DIR, TASKS_DIR, REGISTRY, NAME_RE,
+                    READY_MARKERS, BUSY_MARKERS, TRUST_MARKERS, BYPASS_MARKER,
+                    DONE_MARKER)
+from common import _now, _die
+import backend
 
-# Footer text Claude's TUI shows once the input box is ready for typing.
-READY_MARKERS = ("shift+tab to cycle", "for shortcuts")
-# Text shown while Claude is actively working on a turn.
-BUSY_MARKERS = ("esc to interrupt", "interrupt)")
-# Folder-trust dialog we auto-accept (default option = trust) so spawning is
-# hands-off. Wording varies across versions, so match several phrasings.
-TRUST_MARKERS = (
-    "do you trust", "trust the files", "trust this folder",
-    "is this a project you", "quick safety check",
-)
-# One-time "Bypass Permissions mode" acceptance; option 2 is "Yes, I accept".
-BYPASS_MARKER = "yes, i accept"
-# Marker we instruct workers to print when finished.
-DONE_MARKER = "worker-done"
-
-NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+_backend = backend.get_backend()
 
 
 # --------------------------------------------------------------------------- #
-# small helpers
+# backend delegation helpers
 # --------------------------------------------------------------------------- #
-def _now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-
-def _die(msg: str, code: int = 1) -> "NoReturn":  # type: ignore[name-defined]
-    print(f"error: {msg}", file=sys.stderr)
-    sys.exit(code)
-
-
-def _have_tmux() -> bool:
-    return shutil.which("tmux") is not None
-
-
-def _tmux(*args: str, check: bool = False) -> subprocess.CompletedProcess:
-    try:
-        return subprocess.run(
-            ["tmux", *args], capture_output=True, text=True, check=check
-        )
-    except FileNotFoundError:
-        # tmux not installed yet: behave like a failed call so callers degrade.
-        return subprocess.CompletedProcess(args, 127, "", "tmux: not found")
-
-
-def _target(name: str) -> str:
-    return f"{SESSION}:{name}"
-
-
-def _session_exists() -> bool:
-    return _tmux("has-session", "-t", SESSION).returncode == 0
-
-
-def _windows() -> list[str]:
-    """Live window names in the session."""
-    if not _session_exists():
-        return []
-    r = _tmux("list-windows", "-t", SESSION, "-F", "#{window_name}")
-    if r.returncode != 0:
-        return []
-    return [ln for ln in r.stdout.splitlines() if ln]
+def _have_backend() -> bool:
+    return _backend.available()
 
 
 def _window_exists(name: str) -> bool:
-    return name in _windows()
+    return _backend.worker_exists(name)
+
+
+def _windows() -> list:
+    return _backend.list_workers()
+
+
+def _session_exists() -> bool:
+    return _backend.session_exists()
 
 
 def _capture(name: str, lines: int = 200) -> str:
-    """Rendered text of a worker's pane, including recent scrollback."""
-    r = _tmux("capture-pane", "-p", "-t", _target(name), "-S", f"-{lines}")
-    return r.stdout if r.returncode == 0 else ""
+    return _backend.capture(name, lines)
 
 
 def _send_text(name: str, text: str) -> None:
-    """Type a single submitted message into a worker's Claude prompt."""
-    one_line = " ".join(text.split())  # collapse newlines so Enter submits once
-    _tmux("send-keys", "-t", _target(name), "-l", "--", one_line)
-    time.sleep(0.25)
-    _tmux("send-keys", "-t", _target(name), "Enter")
+    _backend.send_text(name, text)
 
 
 def _worker_state(name: str) -> str:
@@ -137,81 +86,18 @@ def _load() -> dict:
             return {}
     return {}
 
+
 def _save(reg: dict) -> None:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     REGISTRY.write_text(json.dumps(reg, indent=2))
 
 
 # --------------------------------------------------------------------------- #
-# readiness
-# --------------------------------------------------------------------------- #
-def _wait_ready(name: str, timeout: float = 40.0) -> bool:
-    """Wait for the worker's TUI to be ready, auto-accepting trust dialogs."""
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        low = _capture(name, 60).lower()
-        if BYPASS_MARKER in low:  # "Bypass Permissions mode" warning -> accept
-            _tmux("send-keys", "-t", _target(name), "2")
-            time.sleep(0.4)
-            _tmux("send-keys", "-t", _target(name), "Enter")
-            time.sleep(1.5)
-            continue
-        if any(m in low for m in TRUST_MARKERS):
-            _tmux("send-keys", "-t", _target(name), "Enter")  # accept default
-            time.sleep(1.0)
-            continue
-        if any(m in low for m in READY_MARKERS):
-            return True
-        time.sleep(0.5)
-    return False
-
-
-# A tiny launcher script run *directly* as the tmux window's process. Running
-# claude this way (instead of typing a command into an interactive shell) avoids
-# shell-startup races, dropped characters, and command-quoting problems. It also
-# sanitizes the inherited Python venv (claude refuses to start inside one) and
-# reads the optional role from a file, so no role text needs shell-quoting.
-LAUNCHER = STATE_DIR / "agent-launch.sh"
-_LAUNCHER_BODY = (
-    "#!/usr/bin/env bash\n"
-    '[ -n "$VIRTUAL_ENV" ] && export PATH="${PATH//$VIRTUAL_ENV\\/bin:/}"\n'
-    "unset VIRTUAL_ENV\n"
-    'role="$(cat "$1" 2>/dev/null)"\n'
-    'if [ -n "$role" ]; then\n'
-    '  exec claude --dangerously-skip-permissions --append-system-prompt "$role"\n'
-    "else\n"
-    "  exec claude --dangerously-skip-permissions\n"
-    "fi\n"
-)
-
-
-def _ensure_launcher() -> None:
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
-    if not LAUNCHER.exists() or LAUNCHER.read_text() != _LAUNCHER_BODY:
-        LAUNCHER.write_text(_LAUNCHER_BODY)
-    LAUNCHER.chmod(0o755)
-
-
-def _spawn_window(name: str, project_dir: str, role_file: str = "",
-                  ready_timeout: float = 45.0) -> tuple[bool, str]:
-    """Create a tmux window running claude directly. Returns (ready, error)."""
-    _ensure_launcher()
-    cmd = f"bash {shlex.quote(str(LAUNCHER))} {shlex.quote(role_file)}"
-    if not _session_exists():
-        r = _tmux("new-session", "-d", "-s", SESSION, "-n", name, "-c", project_dir, cmd)
-    else:
-        r = _tmux("new-window", "-t", SESSION, "-n", name, "-c", project_dir, cmd)
-    if r.returncode != 0:
-        return False, r.stderr.strip()
-    return _wait_ready(name, ready_timeout), ""
-
-
-# --------------------------------------------------------------------------- #
 # commands
 # --------------------------------------------------------------------------- #
 def cmd_spawn(a: argparse.Namespace) -> None:
-    if not _have_tmux():
-        _die("tmux is not installed. Run: sudo apt install -y tmux")
+    if not _have_backend():
+        _die(_backend.install_hint())
     name = a.name
     if not NAME_RE.match(name):
         _die(f"invalid worker name {name!r} (use letters, digits, . _ -)")
@@ -234,10 +120,10 @@ def cmd_spawn(a: argparse.Namespace) -> None:
     task_path = TASKS_DIR / f"{name}.md"
     task_path.write_text(task)
 
-    # create a window running claude directly (no role for one-off workers)
-    ready, err = _spawn_window(name, str(proj))
+    # create a worker terminal running claude directly
+    ready, err = _backend.spawn(name, str(proj))
     if err:
-        _die(f"failed to create tmux window: {err}")
+        _die(f"failed to start worker: {err}")
     if not ready:
         print(f"warning: {name} TUI not confirmed ready; sending task anyway",
               file=sys.stderr)
@@ -261,7 +147,7 @@ def cmd_spawn(a: argparse.Namespace) -> None:
     _save(reg)
     print(f"spawned worker '{name}' in {proj}")
     print(f"  task: {task_path}")
-    print(f"  watch: tmux attach -t {SESSION}  (then Ctrl-b w to pick a window)")
+    print(f"  watch: {_backend.attach_hint()}")
 
 
 def cmd_list(a: argparse.Namespace) -> None:
@@ -318,7 +204,7 @@ def cmd_stop(a: argparse.Namespace) -> None:
     reg = _load()
     if a.name == "--all" or a.all:
         if _session_exists():
-            _tmux("kill-session", "-t", SESSION)
+            _backend.kill_all()
         for n in reg:
             reg[n]["status"] = "stopped"
         _save(reg)
@@ -326,7 +212,7 @@ def cmd_stop(a: argparse.Namespace) -> None:
         return
     if not _window_exists(a.name):
         _die(f"no live worker named {a.name!r}")
-    _tmux("kill-window", "-t", _target(a.name))
+    _backend.kill(a.name)
     if a.name in reg:
         reg[a.name]["status"] = "stopped"
         _save(reg)
@@ -334,8 +220,7 @@ def cmd_stop(a: argparse.Namespace) -> None:
 
 
 def cmd_attach(a: argparse.Namespace) -> None:
-    print(f"tmux attach -t {SESSION}")
-    print("  Ctrl-b w  -> list/switch windows   |   Ctrl-b d -> detach (leave running)")
+    print(_backend.attach_hint())
 
 
 # --------------------------------------------------------------------------- #
