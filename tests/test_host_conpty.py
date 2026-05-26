@@ -42,8 +42,9 @@ def test_control_protocol_roundtrip():
         assert st["ready"] is True
         assert "for shortcuts" in _send(port, "CAPTURE 50")
         assert _send(port, "SEND do the thing").strip() == "OK"
-        assert child.written and child.written[-1].endswith("\r")
-        assert "do the thing" in child.written[-1]
+        joined = "".join(child.written)
+        assert "do the thing" in joined        # body delivered
+        assert joined.endswith("\r")            # submitted by a separate Enter
     finally:
         host.stop_server()
 

@@ -108,9 +108,14 @@ class AgentHost:
                 "started_at": self._started_at, "pid": os.getpid()}
 
     def inject(self, text):
-        # collapse to one submitted line, like tmux send-keys -l + Enter
+        # Type the body, then submit with a SEPARATE Enter after a short gap.
+        # A long line followed by a bundled "\r" in one write gets swallowed as
+        # part of a paste and never submits; a distinct, slightly-delayed "\r"
+        # is seen as a real Enter keystroke. Mirrors tmux send-keys -l + Enter.
         one_line = " ".join(text.split())
-        self.write(one_line + "\r")
+        self.write(one_line)
+        time.sleep(0.3)
+        self.write("\r")
 
     def start_server(self):
         self._server = _Server(("127.0.0.1", 0), _Handler)
