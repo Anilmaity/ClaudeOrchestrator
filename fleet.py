@@ -50,6 +50,7 @@ POLL = 2.0          # dispatcher poll interval (seconds)
 DELIVER_GRACE = 10  # if an agent never goes busy this long after dispatch, retry
 MAX_TRIES = 3       # give up delivering a task after this many attempts
 CONFIRM_IDLE = 2    # consecutive idle polls required before a task is called done
+CONFIRM_GONE = 3    # consecutive 'window gone' polls before a running task fails
 
 _LOCK = threading.Lock()
 AGENTS: list[dict] = []     # active fleet, populated by `up`
@@ -331,8 +332,15 @@ class Dispatcher(threading.Thread):
         # 0) hot-reload fleet.json so agents added/removed while running show up
         self._reload_agents()
 
-        # 1) keep terminals alive (outside the lock; may block on readiness)
+        # 1) keep terminals alive (outside the lock; may block on readiness).
+        # Never respawn an agent that has a running task: a busy agent doing heavy
+        # work can miss PINGs and look "gone", and respawning would displace its
+        # working session and lose its progress. Only revive idle/dead agents.
+        busy_with_task = {t["agent"] for t in _load_tasks()["tasks"]
+                          if t["status"] == "running"}
         for a in self.agents.values():
+            if a["name"] in busy_with_task:
+                continue
             if not orch._window_exists(a["name"]):
                 ensure_agent(a)
 
@@ -344,10 +352,15 @@ class Dispatcher(threading.Thread):
             for t in (x for x in d["tasks"] if x["status"] == "running"):
                 name = t["agent"]
                 if not orch._window_exists(name):
-                    t.update(status="failed", finished_at=_now(),
-                             log=(t.get("log") or "") + "\n[agent terminal closed]")
+                    # Require sustained absence: a busy agent under load can miss a
+                    # PING; one missed read must not fail an in-flight task.
+                    t["gone_seen"] = t.get("gone_seen", 0) + 1
                     changed = True
+                    if t["gone_seen"] >= CONFIRM_GONE:
+                        t.update(status="failed", finished_at=_now(),
+                                 log=(t.get("log") or "") + "\n[agent terminal closed]")
                     continue
+                t["gone_seen"] = 0
                 act = agent_activity(name)
                 if act == "busy":
                     if not t.get("saw_busy") or t.get("idle_seen"):
@@ -391,7 +404,7 @@ class Dispatcher(threading.Thread):
                     continue
                 orch._send_text(name, _kickoff(t))
                 t.update(status="running", started_at=_now(), saw_busy=False,
-                         idle_seen=0, tries=1)
+                         idle_seen=0, gone_seen=0, tries=1)
                 busy.add(name)
                 changed = True
 

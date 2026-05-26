@@ -7,15 +7,16 @@ import orch
 
 class FakeBackend:
     """Drives agent_activity via scripted CAPTURE outputs (one per read)."""
-    def __init__(self, captures):
+    def __init__(self, captures, alive=True):
         self.captures = list(captures)
         self.i = 0
+        self.alive = alive
 
     def available(self):
         return True
 
     def worker_exists(self, name):
-        return True
+        return self.alive
 
     def capture(self, name, lines=200):
         v = self.captures[min(self.i, len(self.captures) - 1)]
@@ -44,8 +45,8 @@ def _running_task():
     }
 
 
-def _setup(tmp_path, monkeypatch, captures):
-    fb = FakeBackend(captures)
+def _setup(tmp_path, monkeypatch, captures, alive=True):
+    fb = FakeBackend(captures, alive=alive)
     monkeypatch.setattr(orch, "_backend", fb)
     monkeypatch.setattr(fleet, "STATE_DIR", tmp_path)
     monkeypatch.setattr(fleet, "TASKS_FILE", tmp_path / "tasks.json")
@@ -90,3 +91,27 @@ def test_write_task_log_handles_unicode(tmp_path, monkeypatch):
     text = "▐▛███▜▌ box TUI ▝▜█████▛▘"
     fleet._write_task_log("t-x", text)
     assert (tmp_path / "logs" / "t-x.log").read_text(encoding="utf-8") == text
+
+
+def test_busy_task_survives_single_missed_ping(tmp_path, monkeypatch):
+    # Agent looks "gone" (missed PING) but has a running task -> stay running.
+    disp = _setup(tmp_path, monkeypatch, [], alive=False)
+    disp.tick()
+    assert _status(tmp_path) == "running"
+
+
+def test_sustained_gone_fails_task(tmp_path, monkeypatch):
+    disp = _setup(tmp_path, monkeypatch, [], alive=False)
+    for _ in range(fleet.CONFIRM_GONE):
+        disp.tick()
+    assert _status(tmp_path) == "failed"
+
+
+def test_running_task_agent_not_respawned(tmp_path, monkeypatch):
+    # Keep-alive must not respawn (displace) an agent that has a running task,
+    # even when its window looks gone.
+    disp = _setup(tmp_path, monkeypatch, [], alive=False)
+    calls = []
+    monkeypatch.setattr(fleet, "ensure_agent", lambda ag: calls.append(ag["name"]))
+    disp.tick()
+    assert "a" not in calls
