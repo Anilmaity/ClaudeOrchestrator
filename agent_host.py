@@ -198,6 +198,62 @@ def _pump(host):
     host._write_status()
 
 
+# msvcrt.getwch() returns these prefixes for special keys, followed by a second
+# char identifying the key. Map the common ones to the VT/ANSI sequences a
+# terminal app (claude's TUI) expects.
+_SPECIAL_KEYS = {
+    "H": "\x1b[A",   # Up
+    "P": "\x1b[B",   # Down
+    "M": "\x1b[C",   # Right
+    "K": "\x1b[D",   # Left
+    "G": "\x1b[H",   # Home
+    "O": "\x1b[F",   # End
+    "I": "\x1b[5~",  # Page Up
+    "Q": "\x1b[6~",  # Page Down
+    "R": "\x1b[2~",  # Insert
+    "S": "\x1b[3~",  # Delete
+}
+
+
+def _key_to_bytes(ch: str, ch2: str = "") -> str:
+    """Translate one msvcrt.getwch() result into what to feed the ConPTY child.
+
+    Special keys arrive as a prefix ('\\x00' or '\\xe0') plus a second char in
+    `ch2`; everything else is a literal character. Returns "" for keys we drop.
+    """
+    if ch in ("\x00", "\xe0"):
+        return _SPECIAL_KEYS.get(ch2, "")
+    if ch in ("\r", "\n"):
+        return "\r"
+    if ch == "\x08":          # Backspace -> DEL, what line editors expect
+        return "\x7f"
+    return ch
+
+
+def _forward_console_input(host) -> None:
+    """Read keystrokes from this window's console and feed them to the child so
+    the user can type directly into the agent. Runs in a daemon thread; no-op
+    where msvcrt is unavailable (non-Windows / no console)."""
+    try:
+        import msvcrt
+    except ImportError:
+        return
+    child = host.child
+    while child.isalive():
+        try:
+            ch = msvcrt.getwch()
+            ch2 = msvcrt.getwch() if ch in ("\x00", "\xe0") else ""
+        except Exception:
+            break
+        data = _key_to_bytes(ch, ch2)
+        if not data:
+            continue
+        try:
+            child.write(data)
+        except Exception:
+            break
+
+
 def main(argv=None):
     argv = argv if argv is not None else sys.argv[1:]
     name, project_dir, status_path = argv[0], argv[1], Path(argv[2])
@@ -215,6 +271,10 @@ def main(argv=None):
         os.system(f"title corch:{name}")  # window title
     except Exception:
         pass
+    # Forward this console's keystrokes to claude so the window is interactive
+    # (the orch control socket still drives it too, for peek/send/dispatch).
+    threading.Thread(target=_forward_console_input, args=(host,),
+                     daemon=True).start()
     host.start_pump(background=False)     # blocks until claude exits / STOP
     host.shutdown()
     return 0

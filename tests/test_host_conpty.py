@@ -46,6 +46,44 @@ def test_control_protocol_roundtrip():
         host.stop_server()
 
 
+def test_key_to_bytes_regular_and_control():
+    assert agent_host._key_to_bytes("a") == "a"
+    assert agent_host._key_to_bytes("\r") == "\r"
+    assert agent_host._key_to_bytes("\n") == "\r"
+    assert agent_host._key_to_bytes("\x08") == "\x7f"   # Backspace -> DEL
+
+
+@pytest.mark.parametrize("prefix", ["\x00", "\xe0"])
+def test_key_to_bytes_arrows(prefix):
+    assert agent_host._key_to_bytes(prefix, "H") == "\x1b[A"   # Up
+    assert agent_host._key_to_bytes(prefix, "P") == "\x1b[B"   # Down
+    assert agent_host._key_to_bytes(prefix, "M") == "\x1b[C"   # Right
+    assert agent_host._key_to_bytes(prefix, "K") == "\x1b[D"   # Left
+
+
+def test_key_to_bytes_unknown_special_dropped():
+    assert agent_host._key_to_bytes("\x00", "\x99") == ""
+
+
+def test_forward_console_input_feeds_child(monkeypatch):
+    # Fake msvcrt that yields keystrokes then raises to end the loop:
+    # h, i, Enter, Up-arrow (prefix + 'H').
+    keys = iter(["h", "i", "\r", "\x00", "H"])
+
+    class FakeMsvcrt:
+        @staticmethod
+        def getwch():
+            try:
+                return next(keys)
+            except StopIteration:
+                raise EOFError
+    monkeypatch.setitem(sys.modules, "msvcrt", FakeMsvcrt)
+    child = FakeChild()
+    host = agent_host.AgentHost.for_test(child=child)
+    agent_host._forward_console_input(host)   # returns when getwch raises
+    assert "".join(child.written) == "hi\r\x1b[A"
+
+
 winpty_missing = False
 try:
     import winpty  # noqa: F401
