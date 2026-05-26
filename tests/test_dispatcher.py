@@ -81,3 +81,12 @@ def test_consecutive_idle_completes(tmp_path, monkeypatch):
     for _ in range(5):
         disp.tick()
     assert _status(tmp_path) == "done"
+
+
+def test_write_task_log_handles_unicode(tmp_path, monkeypatch):
+    # Captured TUI output contains box-drawing glyphs; the log must not crash
+    # on the Windows default (cp1252) encoding.
+    monkeypatch.setattr(fleet, "TASK_LOGS", tmp_path / "logs")
+    text = "▐▛███▜▌ box TUI ▝▜█████▛▘"
+    fleet._write_task_log("t-x", text)
+    assert (tmp_path / "logs" / "t-x.log").read_text(encoding="utf-8") == text

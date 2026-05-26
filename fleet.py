@@ -262,7 +262,9 @@ def _tail(text: str, n: int = 160) -> str:
 
 def _write_task_log(tid: str, text: str) -> None:
     TASK_LOGS.mkdir(parents=True, exist_ok=True)
-    (TASK_LOGS / f"{tid}.log").write_text(text)
+    # utf-8: captured TUI output has box-drawing glyphs that the Windows default
+    # (cp1252) can't encode, which crashed the dispatcher's done-marking path.
+    (TASK_LOGS / f"{tid}.log").write_text(text, encoding="utf-8")
 
 
 def add_task(agent: str, description: str) -> str:
@@ -470,7 +472,7 @@ class Handler(BaseHTTPRequestHandler):
                 q = parse_qs(u.query)
                 tid = (q.get("id") or [""])[0]
                 f = TASK_LOGS / f"{tid}.log"
-                text = f.read_text() if f.exists() else "(no captured log yet)"
+                text = f.read_text(encoding="utf-8") if f.exists() else "(no captured log yet)"
                 self._json({"text": text})
             elif u.path == "/api/docs":
                 q = parse_qs(u.query)
@@ -571,7 +573,7 @@ def _pid_alive(pid: int) -> bool:
 def cmd_up(a: argparse.Namespace) -> None:
     for _s in (sys.stdout, sys.stderr):
         try:
-            _s.reconfigure(line_buffering=True)
+            _s.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
         except (AttributeError, ValueError):
             pass
     # Refuse to start a second dispatcher: two would fight over the same agents
