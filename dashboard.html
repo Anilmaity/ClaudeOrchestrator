@@ -13,13 +13,13 @@
   }
   *{box-sizing:border-box}
   body{margin:0;font:14px/1.5 system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--txt)}
-  header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
+  header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#1b1f29,#171a21);position:sticky;top:0;z-index:5}
   header h1{font-size:16px;margin:0;font-weight:600}
   header .dot{width:8px;height:8px;border-radius:50%;background:var(--idle)}
   header .sub{color:var(--dim);font-size:12px}
   main{display:grid;grid-template-columns:340px 1fr;gap:16px;padding:16px;max-width:1300px;margin:0 auto}
   h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:0 0 10px}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px;box-shadow:0 1px 0 rgba(255,255,255,.02),0 8px 24px rgba(0,0,0,.25)}
   .agent{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:10px;background:var(--panel2)}
   .agent .top{display:flex;align-items:center;justify-content:space-between}
   .agent .name{font-weight:600}
@@ -42,6 +42,8 @@
   select,textarea,input{width:100%;background:#0c0e12;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:9px;font:inherit}
   textarea{resize:vertical;min-height:80px}
   button{cursor:pointer;border:1px solid var(--line);background:var(--panel2);color:var(--txt);border-radius:8px;padding:8px 12px;font:inherit}
+  button:hover{border-color:var(--accent)}
+  button.primary:hover{filter:brightness(1.08)}
   button.primary{background:var(--accent);border-color:var(--accent);color:#0c1020;font-weight:600;width:100%;margin-top:10px}
   button.mini{padding:3px 8px;font-size:11px}
   table{width:100%;border-collapse:collapse}
@@ -50,6 +52,10 @@
   td.desc{max-width:420px;color:var(--txt)}
   .muted{color:var(--dim)}
   .row-actions{display:flex;gap:6px}
+  .attention{margin:12px 16px 0;padding:10px 14px;border:1px solid var(--attn);background:#241414;border-radius:12px;color:var(--attn);font-size:13px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
+  .attention strong{color:var(--txt)}
+  .attention .chip{background:#3a1414;border:1px solid var(--attn);border-radius:999px;padding:2px 10px}
+  .attention[hidden]{display:none}
   /* modal */
   .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;padding:20px}
   .modal.open{display:flex}
@@ -65,6 +71,7 @@
   <h1>Claude Fleet</h1>
   <span class="sub" id="summary">loading…</span>
 </header>
+<div id="attention" class="attention" hidden></div>
 
 <main>
   <section>
@@ -172,11 +179,24 @@ function typingInAgents(){
   return el && el.tagName === "INPUT" && el.closest("#agents");
 }
 
+function renderAttention(agents, tasks){
+  const need = agents.filter(a=>a.attention).map(a=>a.name);
+  const failed = tasks.filter(t=>t.status==='failed');
+  const el = $("#attention");
+  if(!need.length && !failed.length){ el.hidden = true; return; }
+  const parts = [];
+  if(need.length) parts.push(`<span><strong>Needs you:</strong> ${need.map(esc).join(", ")}</span>`);
+  if(failed.length) parts.push(`<span class="chip">⚠ ${failed.length} failed task${failed.length>1?'s':''}</span>`);
+  el.innerHTML = parts.join("");
+  el.hidden = false;
+}
+
 async function refresh(){
   try{
     const s = await api("/api/state");
     if(!typingInAgents()) renderAgents(s.agents);
     renderTasks(s.tasks);
+    renderAttention(s.agents, s.tasks);
     const counts = s.tasks.reduce((m,t)=>(m[t.status]=(m[t.status]||0)+1,m),{});
     const attn = s.agents.filter(a=>a.attention).length;
     $("#summary").textContent =
@@ -217,7 +237,7 @@ async function cancel(id){ await api("/api/task/cancel",{method:"POST",headers:{
 async function restart(name){ if(!confirm("Restart agent "+name+"?")) return;
   await api("/api/agent/restart",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({name})}); refresh(); }
 
-function openModal(title, text){ $("#modalTitle").textContent=title; $("#modalBody").textContent=text||"(empty)"; $("#modal").classList.add("open"); }
+function openModal(title, text){ $("#modalTitle").textContent=title; const b=$("#modalBody"); b.textContent=text||"(empty)"; $("#modal").classList.add("open"); b.scrollTop = b.scrollHeight; }
 function closeModal(){ $("#modal").classList.remove("open"); }
 async function taskLog(id){ const r=await api("/api/task/log?id="+encodeURIComponent(id)); openModal("Task "+id+" log", r.text); }
 async function liveLog(name){ const r=await api("/api/logs?agent="+encodeURIComponent(name)+"&lines=300"); openModal("Live: "+name, r.text); }
