@@ -267,7 +267,22 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _force_utf8_output() -> None:
+    """Make stdout/stderr UTF-8 so printing captured TUI output never crashes.
+
+    Windows consoles (and redirected pipes) default to cp1252, which can't encode
+    the box-drawing glyphs Claude's TUI emits; that raised UnicodeEncodeError in
+    `peek`. Reconfigure best-effort; ignore streams that don't support it.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main() -> None:
+    _force_utf8_output()
     args = build_parser().parse_args()
     args.func(args)
 
