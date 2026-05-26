@@ -134,5 +134,89 @@ class AgentHost:
                 pass
 
 
-def _pump(host):  # replaced in 5b with the ConPTY pump
-    raise NotImplementedError
+class _PtyChild:
+    """Adapts winpty.PtyProcess to the .write(str)/.isalive()/.read() interface."""
+    def __init__(self, proc):
+        self.proc = proc
+    def write(self, text):
+        self.proc.write(text)
+    def isalive(self):
+        try:
+            return self.proc.isalive()
+        except Exception:
+            return False
+    def read(self, size=65536):
+        try:
+            return self.proc.read(size)
+        except EOFError:
+            return ""
+
+
+def spawn_conpty(name, cmd, cwd, cols, rows, status_path=None, role_file=""):
+    """Start `cmd` under a ConPTY and return an AgentHost wired to it."""
+    from winpty import PtyProcess
+    env = common.clean_child_env()
+    proc = PtyProcess.spawn(cmd, cwd=cwd, dimensions=(rows, cols), env=env)
+    host = AgentHost(name=name, child=_PtyChild(proc), cols=cols, rows=rows,
+                     status_path=status_path)
+    host._pty = proc
+    return host
+
+
+def _pump(host):
+    """Read pty output forever: echo to this console + feed the pyte screen +
+    auto-accept trust/bypass dialogs + flip `ready` when the footer appears."""
+    child = host.child
+    accepted_bypass = False
+    while child.isalive():
+        data = child.read(65536)
+        if data:
+            try:
+                sys.stdout.write(data)
+                sys.stdout.flush()
+            except Exception:
+                pass
+            host.screen.feed(data.encode("utf-8", "replace"))
+            low = host.screen.text().lower()
+            if not accepted_bypass and common.BYPASS_MARKER in low:
+                child.write("2")
+                time.sleep(0.3)
+                child.write("\r")
+                accepted_bypass = True
+                time.sleep(1.0)
+                continue
+            if any(m in low for m in common.TRUST_MARKERS):
+                child.write("\r")
+                time.sleep(0.8)
+                continue
+            host.mark_ready_if_seen()
+            host._write_status()
+        else:
+            time.sleep(0.05)
+    host._write_status()
+
+
+def main(argv=None):
+    argv = argv if argv is not None else sys.argv[1:]
+    name, project_dir, status_path = argv[0], argv[1], Path(argv[2])
+    role_file = argv[3] if len(argv) > 3 else ""
+    cols, rows = _shutil.get_terminal_size(fallback=(120, 50))
+    role = ""
+    if role_file and Path(role_file).exists():
+        role = " ".join(Path(role_file).read_text().split())
+    cmd = ["claude", "--dangerously-skip-permissions"]
+    if role:
+        cmd += ["--append-system-prompt", role]
+    host = spawn_conpty(name, cmd, project_dir, cols, rows, status_path)
+    host.start_server()
+    try:
+        os.system(f"title corch:{name}")  # window title
+    except Exception:
+        pass
+    host.start_pump(background=False)     # blocks until claude exits / STOP
+    host.shutdown()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
