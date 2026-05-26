@@ -52,6 +52,7 @@ AGENTS: list[dict] = []     # active fleet, populated by `up`
 DOCS_ROOT = HERE / "fleet_docs"          # uploaded documents live here
 SHARED = "_shared"                        # reserved subfolder for shared docs
 MAX_DOC_BYTES = 25 * 1024 * 1024          # 25 MB per-file upload cap
+MAX_REQUEST_BYTES = MAX_DOC_BYTES * 2     # cap POST body memory (base64+JSON overhead)
 
 
 # --------------------------------------------------------------------------- #
@@ -422,6 +423,7 @@ class Handler(BaseHTTPRequestHandler):
         n = int(self.headers.get("Content-Length", 0) or 0)
         if not n:
             return {}
+        n = min(n, MAX_REQUEST_BYTES)   # bound memory; oversize bodies truncate -> rejected
         try:
             return json.loads(self.rfile.read(n) or b"{}")
         except json.JSONDecodeError:
@@ -504,6 +506,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"file": save_doc(scope, name, filename, data)})
             except ValueError as e:
                 self._json({"error": str(e)}, 400)
+            except OSError:
+                self._json({"error": "storage error"}, 500)
         elif u.path == "/api/docs/delete":
             scope = (body.get("scope") or "").strip()
             name = body.get("name") or None
@@ -512,6 +516,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"ok": delete_doc(scope, name, filename)})
             except ValueError as e:
                 self._json({"error": str(e)}, 400)
+            except OSError:
+                self._json({"error": "storage error"}, 500)
         else:
             self._json({"error": "not found"}, 404)
 
