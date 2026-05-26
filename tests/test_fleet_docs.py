@@ -12,6 +12,37 @@ def test_pid_alive_detects_self_and_missing():
     assert fleet._pid_alive(2_000_000_000) is False
 
 
+def test_stop_dispatcher_kills_live_pid(tmp_path, monkeypatch):
+    pidf = tmp_path / "fleet.pid"
+    pidf.write_text("4321")
+    monkeypatch.setattr(fleet, "FLEET_PID", pidf)
+    monkeypatch.setattr(fleet, "_pid_alive", lambda pid: True)
+    calls = []
+    monkeypatch.setattr(fleet.subprocess, "run", lambda *a, **k: calls.append(("run", a)))
+    monkeypatch.setattr(fleet.os, "kill", lambda *a: calls.append(("kill", a)))
+    fleet._stop_dispatcher()
+    assert calls, "expected a kill for a live dispatcher pid"
+    assert not pidf.exists()        # pidfile removed
+
+
+def test_stop_dispatcher_dead_pid_just_cleans(tmp_path, monkeypatch):
+    pidf = tmp_path / "fleet.pid"
+    pidf.write_text("4321")
+    monkeypatch.setattr(fleet, "FLEET_PID", pidf)
+    monkeypatch.setattr(fleet, "_pid_alive", lambda pid: False)
+    calls = []
+    monkeypatch.setattr(fleet.subprocess, "run", lambda *a, **k: calls.append(a))
+    monkeypatch.setattr(fleet.os, "kill", lambda *a: calls.append(a))
+    fleet._stop_dispatcher()
+    assert calls == []              # no kill for a dead pid
+    assert not pidf.exists()        # stale pidfile cleaned up
+
+
+def test_stop_dispatcher_no_pidfile(tmp_path, monkeypatch):
+    monkeypatch.setattr(fleet, "FLEET_PID", tmp_path / "absent.pid")
+    fleet._stop_dispatcher()        # must not raise
+
+
 @pytest.fixture
 def docs(tmp_path, monkeypatch):
     """Point DOCS_ROOT at a temp dir and define one known agent."""

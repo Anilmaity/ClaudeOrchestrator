@@ -24,6 +24,7 @@ import argparse
 import base64
 import json
 import os
+import signal
 import subprocess
 import sys
 import threading
@@ -652,7 +653,35 @@ def cmd_cancel(a: argparse.Namespace) -> None:
     print("canceled" if cancel_task(a.id) else "not found or not pending")
 
 
+def _stop_dispatcher() -> None:
+    """Stop a running `fleet up` (dispatcher) recorded in the pidfile, so its
+    keep-alive loop can't respawn the agents `down` is about to kill."""
+    if not FLEET_PID.exists():
+        return
+    try:
+        pid = int(FLEET_PID.read_text().strip())
+    except (ValueError, OSError):
+        pid = 0
+    if pid > 0 and _pid_alive(pid):
+        if sys.platform == "win32":
+            subprocess.run(["taskkill", "/PID", str(pid), "/F", "/T"],
+                           capture_output=True)
+        else:
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except OSError:
+                pass
+        print(f"stopped dispatcher (pid {pid})")
+    try:
+        FLEET_PID.unlink()
+    except OSError:
+        pass
+
+
 def cmd_down(a: argparse.Namespace) -> None:
+    # Stop the dispatcher first so its keep-alive loop can't respawn the agents
+    # we're about to kill.
+    _stop_dispatcher()
     if orch._session_exists():
         orch._backend.kill_all()
         print("stopped all agent terminals")
