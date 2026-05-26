@@ -25,6 +25,57 @@ sudo apt install -y tmux          # required; only manual step
 chmod +x orch orch.py start-manager.sh
 ```
 
+> **On Windows?** Skip the tmux step — see the **[Windows](#windows)** section below instead.
+
+## Windows
+
+On Windows there is no tmux. The orchestrator uses a **ConPTY backend** instead,
+which opens each worker in its own visible console window titled `corch:<name>`.
+The backend is selected automatically on Windows; no configuration needed.
+
+### One-time setup (Windows)
+
+```
+python -m pip install -r requirements.txt
+```
+
+### Running from PowerShell / cmd
+
+Use the `.cmd` entry points that ship with the project:
+
+```powershell
+.\orch.cmd spawn --name api --dir C:\proj\api --task "Add a /health endpoint and tests"
+.\orch.cmd list
+.\orch.cmd peek api
+.\orch.cmd send api "use FastAPI, not Flask"
+.\orch.cmd wait api
+.\orch.cmd stop api          # or:  .\orch.cmd stop --all
+```
+
+### Watching workers live (Windows)
+
+Each worker opens in its **own console window** titled `corch:<name>`. Switch to
+that window to watch it live. There is no `tmux attach` on Windows.
+
+### Fleet + dashboard (Windows)
+
+```powershell
+.\fleet.cmd up               # start all agents + dispatcher + dashboard
+                             # -> open http://localhost:8787/
+.\fleet.cmd status
+.\fleet.cmd add backend "Add a /health endpoint with tests"
+.\fleet.cmd down
+```
+
+### Backend override
+
+Force a specific backend with the `ORCH_BACKEND` env var:
+
+```powershell
+$env:ORCH_BACKEND = "win"    # always use ConPTY (Windows)
+$env:ORCH_BACKEND = "tmux"   # always use tmux (Linux/macOS, or WSL)
+```
+
 ## Use it
 
 ```bash
