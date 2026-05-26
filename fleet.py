@@ -453,6 +453,14 @@ class Handler(BaseHTTPRequestHandler):
             f = TASK_LOGS / f"{tid}.log"
             text = f.read_text() if f.exists() else "(no captured log yet)"
             self._json({"text": text})
+        elif u.path == "/api/docs":
+            q = parse_qs(u.query)
+            scope = (q.get("scope") or [""])[0]
+            name = (q.get("name") or [None])[0]
+            try:
+                self._json({"files": list_docs(scope, name)})
+            except ValueError as e:
+                self._json({"error": str(e)}, 400)
         else:
             self._json({"error": "not found"}, 404)
 
@@ -484,6 +492,26 @@ class Handler(BaseHTTPRequestHandler):
             if orch._window_exists(name):
                 orch._backend.kill(name)
             self._json({"ok": True})
+        elif u.path == "/api/docs/upload":
+            scope = (body.get("scope") or "").strip()
+            name = body.get("name") or None
+            filename = (body.get("filename") or "").strip()
+            try:
+                data = base64.b64decode(body.get("content_base64") or "")
+            except Exception:
+                return self._json({"error": "bad base64 content"}, 400)
+            try:
+                self._json({"file": save_doc(scope, name, filename, data)})
+            except ValueError as e:
+                self._json({"error": str(e)}, 400)
+        elif u.path == "/api/docs/delete":
+            scope = (body.get("scope") or "").strip()
+            name = body.get("name") or None
+            filename = (body.get("filename") or "").strip()
+            try:
+                self._json({"ok": delete_doc(scope, name, filename)})
+            except ValueError as e:
+                self._json({"error": str(e)}, 400)
         else:
             self._json({"error": "not found"}, 404)
 
