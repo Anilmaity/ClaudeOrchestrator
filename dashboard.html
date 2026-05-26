@@ -56,6 +56,12 @@
   .attention strong{color:var(--txt)}
   .attention .chip{background:#3a1414;border:1px solid var(--attn);border-radius:999px;padding:2px 10px}
   .attention[hidden]{display:none}
+  .doclist{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+  .docrow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 8px;background:var(--panel2);border:1px solid var(--line);border-radius:8px}
+  .docmeta{display:flex;gap:8px;align-items:baseline;min-width:0}
+  .docname{font-family:ui-monospace,monospace;font-size:12px;word-break:break-all}
+  .upload{display:flex;gap:6px;align-items:center;margin-top:8px}
+  .upload input[type=file]{flex:1;padding:6px;font-size:12px}
   /* modal */
   .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;padding:20px;z-index:10}
   .modal.open{display:flex}
@@ -86,6 +92,16 @@
     <div class="card">
       <h2>Agents</h2>
       <div id="agents"></div>
+    </div>
+    <div class="card">
+      <h2>Documents</h2>
+      <label for="docScope">Scope</label>
+      <select id="docScope"></select>
+      <div id="docList" class="doclist"></div>
+      <div class="upload">
+        <input type="file" id="docFile">
+        <button class="mini" id="docUpload">Upload</button>
+      </div>
     </div>
   </section>
 
@@ -149,6 +165,73 @@ function renderAgents(agents){
   const sel = $("#agent"), prev = sel.value;
   sel.innerHTML = agents.map(a=>`<option value="${esc(a.name)}">${esc(a.name)}</option>`).join("");
   if ([...sel.options].some(o=>o.value===prev)) sel.value = prev;
+  renderDocScopes(agents);
+}
+
+let docCache = [];
+
+function docScopeValue(){
+  const v = $("#docScope").value;
+  return v === "__shared__" ? {scope:"shared"} : {scope:"agent", name:v};
+}
+
+function renderDocScopes(agents){
+  const sel = $("#docScope"), prev = sel.value;
+  sel.innerHTML = `<option value="__shared__">Shared (all agents)</option>` +
+    agents.map(a=>`<option value="${esc(a.name)}">${esc(a.name)}</option>`).join("");
+  if([...sel.options].some(o=>o.value===prev)) sel.value = prev;
+}
+
+function fmtSize(n){
+  if(n < 1024) return n+" B";
+  if(n < 1048576) return (n/1024).toFixed(1)+" KB";
+  return (n/1048576).toFixed(1)+" MB";
+}
+
+async function refreshDocs(){
+  const s = docScopeValue();
+  const q = s.scope==="shared" ? "scope=shared"
+    : "scope=agent&name="+encodeURIComponent(s.name);
+  const r = await api("/api/docs?"+q);
+  docCache = r.files || [];
+  $("#docList").innerHTML = docCache.length ? docCache.map((f,i)=>`
+    <div class="docrow">
+      <div class="docmeta"><span class="docname">${esc(f.name)}</span>
+        <span class="muted">${fmtSize(f.size)}</span></div>
+      <div class="row-actions">
+        <button class="mini" onclick="insertDocPath(${i})">insert</button>
+        <button class="mini" onclick="deleteDoc(${i})">delete</button>
+      </div>
+    </div>`).join("") : `<div class="muted">No documents.</div>`;
+}
+
+function insertDocPath(i){
+  const ta = $("#desc"), path = docCache[i].path;
+  const sep = ta.value && !ta.value.endsWith("\n") ? "\n" : "";
+  ta.value += sep + path; ta.focus();
+}
+
+async function uploadDoc(){
+  const inp = $("#docFile"), file = inp.files[0];
+  if(!file) return;
+  const b64 = await new Promise((res,rej)=>{
+    const fr = new FileReader();
+    fr.onload = () => res(String(fr.result).split(",")[1]);
+    fr.onerror = rej;
+    fr.readAsDataURL(file);
+  });
+  const r = await api("/api/docs/upload",{method:"POST",headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({...docScopeValue(), filename:file.name, content_base64:b64})});
+  if(r.error){ alert(r.error); return; }
+  inp.value = ""; refreshDocs();
+}
+
+async function deleteDoc(i){
+  const f = docCache[i];
+  if(!confirm("Delete "+f.name+"?")) return;
+  await api("/api/docs/delete",{method:"POST",headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({...docScopeValue(), filename:f.name})});
+  refreshDocs();
 }
 
 function taskTime(t){
@@ -246,7 +329,9 @@ $("#modal").addEventListener("click", e=>{ if(e.target.id==="modal") closeModal(
 // Ctrl/Cmd+Enter queues the task from the description box.
 $("#desc").addEventListener("keydown", e=>{ if((e.ctrlKey||e.metaKey)&&e.key==="Enter") $("#addBtn").click(); });
 document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeModal(); });
-refresh(); setInterval(refresh, 2500); setInterval(tick, 1000);
+$("#docUpload").onclick = uploadDoc;
+$("#docScope").addEventListener("change", refreshDocs);
+refresh(); refreshDocs(); setInterval(refresh, 2500); setInterval(tick, 1000);
 </script>
 </body>
 </html>
