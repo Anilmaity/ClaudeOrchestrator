@@ -20,7 +20,7 @@ def test_safe_filename_strips_path(docs):
     assert docs._safe_filename("plain.pdf") == "plain.pdf"
 
 
-@pytest.mark.parametrize("bad", ["", ".", "..", "   ", "a/..", "x/"])
+@pytest.mark.parametrize("bad", ["", ".", "..", "   ", "a/..", "x/", "a\x00b"])
 def test_safe_filename_rejects_traversal(docs, bad):
     with pytest.raises(ValueError):
         docs._safe_filename(bad)
@@ -33,6 +33,7 @@ def test_save_and_list_shared(docs):
     files = docs.list_docs("shared")
     assert [f["name"] for f in files] == ["notes.md"]
     assert files[0]["path"].endswith("notes.md")
+    assert "modified" in files[0]
 
 
 def test_save_and_list_agent(docs):

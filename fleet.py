@@ -85,7 +85,7 @@ def load_config(path: Path = CONFIG) -> list[dict]:
 def _safe_filename(filename: str) -> str:
     """Reduce to a bare filename; reject empty / relative / traversal names."""
     base = (filename or "").replace("\\", "/").split("/")[-1].strip()
-    if base in ("", ".", ".."):
+    if base in ("", ".", "..") or "\x00" in base:
         raise ValueError("invalid filename")
     return base
 
