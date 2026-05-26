@@ -6,3 +6,6 @@ __pycache__/
 
 # OS / editor cruft
 .DS_Store
+
+# Fleet uploaded documents (user data, not code)
+fleet_docs/

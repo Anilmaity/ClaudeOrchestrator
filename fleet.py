@@ -21,6 +21,7 @@ Reuses the tmux primitives in orch.py. Stdlib only.
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import sys
 import threading
@@ -48,6 +49,11 @@ MAX_TRIES = 3       # give up delivering a task after this many attempts
 _LOCK = threading.Lock()
 AGENTS: list[dict] = []     # active fleet, populated by `up`
 
+DOCS_ROOT = HERE / "fleet_docs"          # uploaded documents live here
+SHARED = "_shared"                        # reserved subfolder for shared docs
+MAX_DOC_BYTES = 25 * 1024 * 1024          # 25 MB per-file upload cap
+MAX_REQUEST_BYTES = MAX_DOC_BYTES * 2     # cap POST body memory (base64+JSON overhead)
+
 
 # --------------------------------------------------------------------------- #
 # config
@@ -72,6 +78,64 @@ def load_config(path: Path = CONFIG) -> list[dict]:
     if not agents:
         orch._die(f"no agents defined in {path}")
     return agents
+
+
+# --------------------------------------------------------------------------- #
+# documents
+# --------------------------------------------------------------------------- #
+def _safe_filename(filename: str) -> str:
+    """Reduce to a bare filename; reject empty / relative / traversal names."""
+    base = (filename or "").replace("\\", "/").split("/")[-1].strip()
+    if base in ("", ".", "..") or "\x00" in base:
+        raise ValueError("invalid filename")
+    return base
+
+
+def _docs_dir(scope: str, name: str | None = None) -> Path:
+    """Resolve (and create) the folder for a scope. Validates scope/agent."""
+    if scope == "shared":
+        d = DOCS_ROOT / SHARED
+    elif scope == "agent":
+        if name not in {a["name"] for a in AGENTS}:
+            raise ValueError("unknown agent")
+        d = DOCS_ROOT / name
+    else:
+        raise ValueError("invalid scope")
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _doc_meta(p: Path) -> dict:
+    st = p.stat()
+    return {
+        "name": p.name,
+        "size": st.st_size,
+        "modified": datetime.fromtimestamp(st.st_mtime, timezone.utc).isoformat(),
+        "path": str(p),
+    }
+
+
+def list_docs(scope: str, name: str | None = None) -> list[dict]:
+    d = _docs_dir(scope, name)
+    return [_doc_meta(p) for p in sorted(d.iterdir()) if p.is_file()]
+
+
+def save_doc(scope: str, name: str | None, filename: str, data: bytes) -> dict:
+    if len(data) > MAX_DOC_BYTES:
+        raise ValueError("file too large")
+    fn = _safe_filename(filename)
+    p = _docs_dir(scope, name) / fn
+    p.write_bytes(data)
+    return _doc_meta(p)
+
+
+def delete_doc(scope: str, name: str | None, filename: str) -> bool:
+    fn = _safe_filename(filename)
+    p = _docs_dir(scope, name) / fn
+    if p.is_file():
+        p.unlink()
+        return True
+    return False
 
 
 # --------------------------------------------------------------------------- #
@@ -359,6 +423,7 @@ class Handler(BaseHTTPRequestHandler):
         n = int(self.headers.get("Content-Length", 0) or 0)
         if not n:
             return {}
+        n = min(n, MAX_REQUEST_BYTES)   # bound memory; oversize bodies truncate -> rejected
         try:
             return json.loads(self.rfile.read(n) or b"{}")
         except json.JSONDecodeError:
@@ -390,6 +455,14 @@ class Handler(BaseHTTPRequestHandler):
             f = TASK_LOGS / f"{tid}.log"
             text = f.read_text() if f.exists() else "(no captured log yet)"
             self._json({"text": text})
+        elif u.path == "/api/docs":
+            q = parse_qs(u.query)
+            scope = (q.get("scope") or [""])[0]
+            name = (q.get("name") or [None])[0]
+            try:
+                self._json({"files": list_docs(scope, name)})
+            except ValueError as e:
+                self._json({"error": str(e)}, 400)
         else:
             self._json({"error": "not found"}, 404)
 
@@ -421,6 +494,30 @@ class Handler(BaseHTTPRequestHandler):
             if orch._window_exists(name):
                 orch._backend.kill(name)
             self._json({"ok": True})
+        elif u.path == "/api/docs/upload":
+            scope = (body.get("scope") or "").strip()
+            name = body.get("name") or None
+            filename = (body.get("filename") or "").strip()
+            try:
+                data = base64.b64decode(body.get("content_base64") or "")
+            except Exception:
+                return self._json({"error": "bad base64 content"}, 400)
+            try:
+                self._json({"file": save_doc(scope, name, filename, data)})
+            except ValueError as e:
+                self._json({"error": str(e)}, 400)
+            except OSError:
+                self._json({"error": "storage error"}, 500)
+        elif u.path == "/api/docs/delete":
+            scope = (body.get("scope") or "").strip()
+            name = body.get("name") or None
+            filename = (body.get("filename") or "").strip()
+            try:
+                self._json({"ok": delete_doc(scope, name, filename)})
+            except ValueError as e:
+                self._json({"error": str(e)}, 400)
+            except OSError:
+                self._json({"error": "storage error"}, 500)
         else:
             self._json({"error": "not found"}, 404)
 

@@ -13,13 +13,13 @@
   }
   *{box-sizing:border-box}
   body{margin:0;font:14px/1.5 system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--txt)}
-  header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
+  header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#1b1f29,#171a21);position:sticky;top:0;z-index:5}
   header h1{font-size:16px;margin:0;font-weight:600}
   header .dot{width:8px;height:8px;border-radius:50%;background:var(--idle)}
   header .sub{color:var(--dim);font-size:12px}
   main{display:grid;grid-template-columns:340px 1fr;gap:16px;padding:16px;max-width:1300px;margin:0 auto}
   h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:0 0 10px}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px;box-shadow:0 1px 0 rgba(255,255,255,.02),0 8px 24px rgba(0,0,0,.25)}
   .agent{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:10px;background:var(--panel2)}
   .agent .top{display:flex;align-items:center;justify-content:space-between}
   .agent .name{font-weight:600}
@@ -42,6 +42,8 @@
   select,textarea,input{width:100%;background:#0c0e12;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:9px;font:inherit}
   textarea{resize:vertical;min-height:80px}
   button{cursor:pointer;border:1px solid var(--line);background:var(--panel2);color:var(--txt);border-radius:8px;padding:8px 12px;font:inherit}
+  button:hover{border-color:var(--accent)}
+  button.primary:hover{filter:brightness(1.08)}
   button.primary{background:var(--accent);border-color:var(--accent);color:#0c1020;font-weight:600;width:100%;margin-top:10px}
   button.mini{padding:3px 8px;font-size:11px}
   table{width:100%;border-collapse:collapse}
@@ -50,8 +52,18 @@
   td.desc{max-width:420px;color:var(--txt)}
   .muted{color:var(--dim)}
   .row-actions{display:flex;gap:6px}
+  .attention{margin:12px 16px 0;padding:10px 14px;border:1px solid var(--attn);background:#241414;border-radius:12px;color:var(--attn);font-size:13px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
+  .attention strong{color:var(--txt)}
+  .attention .chip{background:#3a1414;border:1px solid var(--attn);border-radius:999px;padding:2px 10px}
+  .attention[hidden]{display:none}
+  .doclist{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+  .docrow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 8px;background:var(--panel2);border:1px solid var(--line);border-radius:8px}
+  .docmeta{display:flex;gap:8px;align-items:baseline;min-width:0}
+  .docname{font-family:ui-monospace,monospace;font-size:12px;word-break:break-all}
+  .upload{display:flex;gap:6px;align-items:center;margin-top:8px}
+  .upload input[type=file]{flex:1;padding:6px;font-size:12px}
   /* modal */
-  .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;padding:20px}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;padding:20px;z-index:10}
   .modal.open{display:flex}
   .modal .box{background:var(--panel);border:1px solid var(--line);border-radius:10px;width:min(900px,100%);max-height:85vh;display:flex;flex-direction:column}
   .modal .hd{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}
@@ -65,6 +77,7 @@
   <h1>Claude Fleet</h1>
   <span class="sub" id="summary">loading…</span>
 </header>
+<div id="attention" class="attention" hidden aria-live="polite"></div>
 
 <main>
   <section>
@@ -79,6 +92,16 @@
     <div class="card">
       <h2>Agents</h2>
       <div id="agents"></div>
+    </div>
+    <div class="card">
+      <h2>Documents</h2>
+      <label for="docScope">Scope</label>
+      <select id="docScope"></select>
+      <div id="docList" class="doclist"></div>
+      <div class="upload">
+        <input type="file" id="docFile">
+        <button class="mini" id="docUpload">Upload</button>
+      </div>
     </div>
   </section>
 
@@ -142,6 +165,76 @@ function renderAgents(agents){
   const sel = $("#agent"), prev = sel.value;
   sel.innerHTML = agents.map(a=>`<option value="${esc(a.name)}">${esc(a.name)}</option>`).join("");
   if ([...sel.options].some(o=>o.value===prev)) sel.value = prev;
+  renderDocScopes(agents);
+}
+
+let docCache = [];
+
+function docScopeValue(){
+  const v = $("#docScope").value;
+  return v === "__shared__" ? {scope:"shared"} : {scope:"agent", name:v};
+}
+
+function renderDocScopes(agents){
+  const sel = $("#docScope"), prev = sel.value;
+  sel.innerHTML = `<option value="__shared__">Shared (all agents)</option>` +
+    agents.map(a=>`<option value="${esc(a.name)}">${esc(a.name)}</option>`).join("");
+  if([...sel.options].some(o=>o.value===prev)) sel.value = prev;
+}
+
+function fmtSize(n){
+  if(n < 1024) return n+" B";
+  if(n < 1048576) return (n/1024).toFixed(1)+" KB";
+  return (n/1048576).toFixed(1)+" MB";
+}
+
+async function refreshDocs(){
+  const s = docScopeValue();
+  const q = s.scope==="shared" ? "scope=shared"
+    : "scope=agent&name="+encodeURIComponent(s.name);
+  const r = await api("/api/docs?"+q);
+  docCache = r.files || [];
+  $("#docList").innerHTML = docCache.length ? docCache.map((f,i)=>`
+    <div class="docrow">
+      <div class="docmeta"><span class="docname">${esc(f.name)}</span>
+        <span class="muted">${fmtSize(f.size)}</span></div>
+      <div class="row-actions">
+        <button class="mini" onclick="insertDocPath(${i})">insert</button>
+        <button class="mini" onclick="deleteDoc(${i})">delete</button>
+      </div>
+    </div>`).join("") : `<div class="muted">No documents.</div>`;
+}
+
+function insertDocPath(i){
+  const ta = $("#desc"), path = docCache[i].path;
+  const sep = ta.value && !ta.value.endsWith("\n") ? "\n" : "";
+  ta.value += sep + path; ta.focus();
+}
+
+async function uploadDoc(){
+  const inp = $("#docFile"), file = inp.files[0];
+  if(!file) return;
+  let b64;
+  try {
+    b64 = await new Promise((res,rej)=>{
+      const fr = new FileReader();
+      fr.onload = () => res(String(fr.result).split(",")[1]);
+      fr.onerror = rej;
+      fr.readAsDataURL(file);
+    });
+  } catch(e) { alert("Could not read file: " + (e.message||e)); return; }
+  const r = await api("/api/docs/upload",{method:"POST",headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({...docScopeValue(), filename:file.name, content_base64:b64})});
+  if(r.error){ alert(r.error); return; }
+  inp.value = ""; refreshDocs();
+}
+
+async function deleteDoc(i){
+  const f = docCache[i];
+  if(!confirm("Delete "+f.name+"?")) return;
+  await api("/api/docs/delete",{method:"POST",headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({...docScopeValue(), filename:f.name})});
+  refreshDocs();
 }
 
 function taskTime(t){
@@ -172,11 +265,24 @@ function typingInAgents(){
   return el && el.tagName === "INPUT" && el.closest("#agents");
 }
 
+function renderAttention(agents, tasks){
+  const need = agents.filter(a=>a.attention).map(a=>a.name);
+  const failed = tasks.filter(t=>t.status==='failed');
+  const el = $("#attention");
+  if(!need.length && !failed.length){ el.hidden = true; return; }
+  const parts = [];
+  if(need.length) parts.push(`<span><strong>Needs you:</strong> ${need.map(esc).join(", ")}</span>`);
+  if(failed.length) parts.push(`<span class="chip">⚠ ${failed.length} failed task${failed.length>1?'s':''}</span>`);
+  el.innerHTML = parts.join("");
+  el.hidden = false;
+}
+
 async function refresh(){
   try{
     const s = await api("/api/state");
     if(!typingInAgents()) renderAgents(s.agents);
     renderTasks(s.tasks);
+    renderAttention(s.agents, s.tasks);
     const counts = s.tasks.reduce((m,t)=>(m[t.status]=(m[t.status]||0)+1,m),{});
     const attn = s.agents.filter(a=>a.attention).length;
     $("#summary").textContent =
@@ -217,7 +323,7 @@ async function cancel(id){ await api("/api/task/cancel",{method:"POST",headers:{
 async function restart(name){ if(!confirm("Restart agent "+name+"?")) return;
   await api("/api/agent/restart",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({name})}); refresh(); }
 
-function openModal(title, text){ $("#modalTitle").textContent=title; $("#modalBody").textContent=text||"(empty)"; $("#modal").classList.add("open"); }
+function openModal(title, text){ $("#modalTitle").textContent=title; const b=$("#modalBody"); b.textContent=text||"(empty)"; $("#modal").classList.add("open"); b.scrollTop = b.scrollHeight; }
 function closeModal(){ $("#modal").classList.remove("open"); }
 async function taskLog(id){ const r=await api("/api/task/log?id="+encodeURIComponent(id)); openModal("Task "+id+" log", r.text); }
 async function liveLog(name){ const r=await api("/api/logs?agent="+encodeURIComponent(name)+"&lines=300"); openModal("Live: "+name, r.text); }
@@ -226,7 +332,9 @@ $("#modal").addEventListener("click", e=>{ if(e.target.id==="modal") closeModal(
 // Ctrl/Cmd+Enter queues the task from the description box.
 $("#desc").addEventListener("keydown", e=>{ if((e.ctrlKey||e.metaKey)&&e.key==="Enter") $("#addBtn").click(); });
 document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeModal(); });
-refresh(); setInterval(refresh, 2500); setInterval(tick, 1000);
+$("#docUpload").onclick = uploadDoc;
+$("#docScope").addEventListener("change", refreshDocs);
+refresh().then(refreshDocs); setInterval(refresh, 2500); setInterval(tick, 1000);
 </script>
 </body>
 </html>
