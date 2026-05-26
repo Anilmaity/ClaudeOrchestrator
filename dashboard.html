@@ -6,132 +6,401 @@
 <title>Claude Fleet</title>
 <style>
   :root{
-    --bg:#0f1115; --panel:#171a21; --panel2:#1d212b; --line:#2a2f3a;
-    --txt:#e6e9ef; --dim:#9aa3b2; --accent:#7aa2ff;
-    --busy:#f0b429; --idle:#39d98a; --offline:#6b7280; --attn:#ff5c5c;
-    --pending:#9aa3b2; --running:#f0b429; --done:#39d98a; --failed:#ff5c5c; --canceled:#6b7280;
+    /* ---- Surfaces (low -> high elevation) ---- */
+    --bg:          #0e1014;
+    --surface-1:   #15181f;
+    --surface-2:   #1b1f28;
+    --surface-3:   #222734;
+    --inset:       #0b0d11;
+    --scrim:       rgba(8,10,14,.66);
+
+    /* ---- Borders ---- */
+    --border:        #2a2f3a;
+    --border-strong: #39414f;
+
+    /* ---- Text ---- */
+    --text:       #e6e9ef;
+    --text-dim:   #9aa3b2;
+    --text-faint: #6b7280;
+
+    /* ---- Accent / interactive ---- */
+    --accent:        #7aa2ff;
+    --accent-hover:  #93b4ff;
+    --accent-press:  #5e86e6;
+    --accent-ink:    #0b1020;
+    --accent-soft:   rgba(122,162,255,.14);
+    --ring:          rgba(122,162,255,.50);
+
+    /* ---- Status: solid + soft ---- */
+    --st-busy:  #f0b429;  --st-busy-soft:  rgba(240,180,41,.15);
+    --st-ok:    #39d98a;  --st-ok-soft:    rgba(57,217,138,.15);
+    --st-off:   #6b7280;  --st-off-soft:   rgba(107,114,128,.16);
+    --st-alert: #ff5c5c;  --st-alert-soft: rgba(255,92,92,.15);
+    --st-wait:  #8b93a7;  --st-wait-soft:  rgba(139,147,167,.14);
+
+    /* ---- Typography ---- */
+    --font: system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono: ui-monospace,"Cascadia Code","Consolas",SFMono-Regular,Menlo,monospace;
+    --fs-700:18px; --fs-600:16px; --fs-500:14px; --fs-400:13px; --fs-300:12px; --fs-200:11px;
+
+    /* ---- Spacing (4px base) ---- */
+    --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px; --sp-6:24px; --sp-8:32px;
+
+    /* ---- Radius ---- */
+    --r-sm:6px; --r-md:10px; --r-lg:14px; --r-pill:999px;
+
+    /* ---- Elevation ---- */
+    --sh-1: 0 1px 0 rgba(255,255,255,.03), 0 1px 2px rgba(0,0,0,.30);
+    --sh-2: 0 8px 24px rgba(0,0,0,.35);
+    --sh-pop: 0 16px 48px rgba(0,0,0,.55);
+
+    /* ---- Motion ---- */
+    --t-fast:120ms; --t-med:200ms; --ease:cubic-bezier(.2,.6,.2,1);
   }
+
   *{box-sizing:border-box}
-  body{margin:0;font:14px/1.5 system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--txt)}
-  header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#1b1f29,#171a21);position:sticky;top:0;z-index:5}
-  header h1{font-size:16px;margin:0;font-weight:600}
-  header .dot{width:8px;height:8px;border-radius:50%;background:var(--idle)}
-  header .sub{color:var(--dim);font-size:12px}
-  main{display:grid;grid-template-columns:340px 1fr;gap:16px;padding:16px;max-width:1300px;margin:0 auto}
-  h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:0 0 10px}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px;box-shadow:0 1px 0 rgba(255,255,255,.02),0 8px 24px rgba(0,0,0,.25)}
-  .agent{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:10px;background:var(--panel2)}
-  .agent .top{display:flex;align-items:center;justify-content:space-between}
-  .agent .name{font-weight:600}
-  .agent .role{color:var(--dim);font-size:12px;margin-top:4px}
-  .agent .path{color:var(--dim);font-size:11px;font-family:ui-monospace,monospace;margin-top:4px;word-break:break-all}
-  .agent .cur{font-size:12px;margin-top:6px;color:var(--accent)}
-  .badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;padding:2px 8px;border-radius:999px;background:#0c0e12;border:1px solid var(--line)}
-  .badge .d{width:7px;height:7px;border-radius:50%}
-  .b-busy .d{background:var(--busy)} .b-idle .d{background:var(--idle)} .b-offline .d{background:var(--offline)}
-  .agent.attn{border-color:var(--attn);box-shadow:0 0 0 1px var(--attn) inset}
-  .b-attn{border-color:var(--attn);color:var(--attn)} .b-attn .d{background:var(--attn);animation:blink 1s steps(2,start) infinite}
-  @keyframes blink{50%{opacity:.25}}
-  .elapsed{color:var(--dim);font-size:11px;font-variant-numeric:tabular-nums}
-  .reply{display:flex;gap:6px;margin-top:8px}
-  .reply input{flex:1;padding:6px 8px;font-size:12px}
-  .pill{font-size:11px;padding:2px 8px;border-radius:999px;text-transform:capitalize}
-  .p-pending{background:#23262e;color:var(--pending)} .p-running{background:#3a2f12;color:var(--running)}
-  .p-done{background:#123422;color:var(--done)} .p-failed{background:#3a1414;color:var(--failed)} .p-canceled{background:#23262e;color:var(--canceled)}
-  label{display:block;font-size:12px;color:var(--dim);margin:8px 0 4px}
-  select,textarea,input{width:100%;background:#0c0e12;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:9px;font:inherit}
-  textarea{resize:vertical;min-height:80px}
-  button{cursor:pointer;border:1px solid var(--line);background:var(--panel2);color:var(--txt);border-radius:8px;padding:8px 12px;font:inherit}
-  button:hover{border-color:var(--accent)}
-  button.primary:hover{filter:brightness(1.08)}
-  button.primary{background:var(--accent);border-color:var(--accent);color:#0c1020;font-weight:600;width:100%;margin-top:10px}
-  button.mini{padding:3px 8px;font-size:11px}
-  table{width:100%;border-collapse:collapse}
-  th,td{text-align:left;padding:8px 8px;border-bottom:1px solid var(--line);vertical-align:top;font-size:13px}
-  th{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
-  td.desc{max-width:420px;color:var(--txt)}
-  .muted{color:var(--dim)}
-  .row-actions{display:flex;gap:6px}
-  .attention{margin:12px 16px 0;padding:10px 14px;border:1px solid var(--attn);background:#241414;border-radius:12px;color:var(--attn);font-size:13px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
-  .attention strong{color:var(--txt)}
-  .attention .chip{background:#3a1414;border:1px solid var(--attn);border-radius:999px;padding:2px 10px}
+  body{margin:0;font:var(--fs-500)/1.5 var(--font);background:var(--bg);color:var(--text);
+       -webkit-font-smoothing:antialiased}
+  :focus-visible{outline:none;box-shadow:0 0 0 3px var(--ring);border-radius:var(--r-sm)}
+  @media (prefers-reduced-motion:reduce){
+    *{animation-duration:.001ms!important;animation-iteration-count:1!important;
+      transition-duration:.001ms!important}
+  }
+
+  /* ---- Header & live status ---- */
+  .header{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:var(--sp-3);
+    padding:var(--sp-3) var(--sp-5);border-bottom:1px solid var(--border);
+    background:linear-gradient(180deg,#1b1f29,#15181f);box-shadow:var(--sh-1)}
+  .header h1{font-size:var(--fs-600);font-weight:600;margin:0}
+  .header .sub{color:var(--text-dim);font-size:var(--fs-300)}
+  .header .needs{color:var(--st-alert);font-weight:600}
+  .livedot{width:9px;height:9px;border-radius:50%;background:var(--st-ok);
+    box-shadow:0 0 0 4px var(--st-ok-soft);flex:none}
+  .livedot.bad{background:var(--st-alert);box-shadow:0 0 0 4px var(--st-alert-soft)}
+  .livedot.loading{background:var(--st-busy);box-shadow:0 0 0 4px var(--st-busy-soft);
+    animation:pulse 1.2s ease-in-out infinite}
+  .poll{margin-left:auto;display:inline-flex;align-items:center;gap:6px;
+    font:var(--fs-300)/1 var(--mono);color:var(--text-dim);cursor:pointer;
+    background:none;border:1px solid var(--border);border-radius:var(--r-pill);padding:5px 10px}
+  .poll:hover{border-color:var(--accent);color:var(--text)}
+
+  /* ---- Shell & layout ---- */
+  .shell{max-width:1400px;margin:0 auto;padding:var(--sp-4)}
+  .layout{display:grid;grid-template-columns:minmax(0,1fr) 372px;gap:var(--sp-4);align-items:start}
+  .primary{display:flex;flex-direction:column;gap:var(--sp-4);min-width:0}
+  .rail{position:sticky;top:76px;display:flex;flex-direction:column;gap:var(--sp-4)}
+  .agents-grid{display:grid;gap:var(--sp-3);grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+
+  @media (max-width:1040px){
+    .layout{grid-template-columns:1fr}
+    .rail{position:static}
+    /* compose floats above agents on mobile so dispatching stays one scroll away */
+    .primary{order:2}
+    .rail{order:1}
+    .rail .docs-card{order:2}
+  }
+  @media (max-width:640px){
+    .agents-grid{grid-template-columns:1fr}
+    .shell{padding:var(--sp-3)}
+  }
+
+  /* ---- Connection-lost banner ---- */
+  .conn-banner{margin:0 0 var(--sp-4);padding:8px var(--sp-4);border-radius:var(--r-md);
+    background:var(--st-alert-soft);border:1px solid var(--st-alert);color:var(--st-alert);
+    font-size:var(--fs-300)}
+  .conn-banner[hidden]{display:none}
+
+  /* ---- Attention bar ---- */
+  .attention{display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-2) var(--sp-4);
+    margin:0 0 var(--sp-4);padding:var(--sp-3) var(--sp-4);
+    border:1px solid var(--st-alert);background:var(--st-alert-soft);
+    border-radius:var(--r-md);color:var(--st-alert);font-size:var(--fs-400)}
+  .attention strong{color:var(--text)}
+  .attention .chip{display:inline-flex;align-items:center;gap:6px;
+    background:rgba(255,92,92,.18);border:1px solid var(--st-alert);
+    border-radius:var(--r-pill);padding:2px 10px}
+  .attention .jump{margin-left:auto}
   .attention[hidden]{display:none}
-  .doclist{display:flex;flex-direction:column;gap:6px;margin:8px 0}
-  .docrow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 8px;background:var(--panel2);border:1px solid var(--line);border-radius:8px}
-  .docmeta{display:flex;gap:8px;align-items:baseline;min-width:0}
-  .docname{font-family:ui-monospace,monospace;font-size:12px;word-break:break-all}
-  .upload{display:flex;gap:6px;align-items:center;margin-top:8px}
-  .upload input[type=file]{flex:1;padding:6px;font-size:12px}
-  /* modal */
-  .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;padding:20px;z-index:10}
-  .modal.open{display:flex}
-  .modal .box{background:var(--panel);border:1px solid var(--line);border-radius:10px;width:min(900px,100%);max-height:85vh;display:flex;flex-direction:column}
-  .modal .hd{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}
-  .modal pre{margin:0;padding:16px;overflow:auto;font:12px/1.5 ui-monospace,monospace;color:#d6dbe6;white-space:pre-wrap;word-break:break-word}
-  @media(max-width:820px){main{grid-template-columns:1fr}}
+
+  /* ---- Shared primitives ---- */
+  .card{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-lg);
+    padding:var(--sp-4);box-shadow:var(--sh-1)}
+  .section-head{display:flex;align-items:center;justify-content:space-between;margin:0 0 var(--sp-3)}
+  .section-head h2,.card > h2{margin:0;font-size:var(--fs-200);font-weight:600;
+    text-transform:uppercase;letter-spacing:.07em;color:var(--text-dim)}
+  .muted{color:var(--text-faint)}
+  .row-actions{display:flex;gap:6px}
+
+  /* Status badge (agent) */
+  .badge{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-200);
+    padding:3px 9px;border-radius:var(--r-pill);border:1px solid var(--border);
+    background:var(--inset);text-transform:capitalize;white-space:nowrap}
+  .badge .d{width:7px;height:7px;border-radius:50%;background:var(--st-off)}
+  .badge[data-s="busy"]{color:var(--st-busy)}     .badge[data-s="busy"] .d{background:var(--st-busy)}
+  .badge[data-s="idle"]{color:var(--st-ok)}        .badge[data-s="idle"] .d{background:var(--st-ok)}
+  .badge[data-s="offline"]{color:var(--text-dim)}  .badge[data-s="offline"] .d{background:var(--st-off)}
+  .badge[data-s="attn"]{color:var(--st-alert);border-color:var(--st-alert)}
+  .badge[data-s="attn"] .d{background:var(--st-alert);animation:pulse 1.2s ease-in-out infinite}
+
+  /* Status pill (task) */
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-200);
+    padding:3px 9px;border-radius:var(--r-pill);text-transform:capitalize;white-space:nowrap}
+  .pill[data-s="pending"] {background:var(--st-wait-soft);  color:var(--st-wait)}
+  .pill[data-s="running"] {background:var(--st-busy-soft);  color:var(--st-busy)}
+  .pill[data-s="done"]    {background:var(--st-ok-soft);    color:var(--st-ok)}
+  .pill[data-s="failed"]  {background:var(--st-alert-soft); color:var(--st-alert)}
+  .pill[data-s="canceled"]{background:var(--st-off-soft);   color:var(--text-dim)}
+  .pill .spin{display:inline-block;animation:spin 1.4s linear infinite}
+
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* Controls */
+  input,select,textarea{width:100%;background:var(--inset);border:1px solid var(--border);
+    color:var(--text);border-radius:var(--r-sm);padding:9px 10px;font:inherit}
+  input:hover,select:hover,textarea:hover{border-color:var(--border-strong)}
+  textarea{resize:vertical;min-height:84px;line-height:1.45}
+  label{display:block;font-size:var(--fs-300);color:var(--text-dim);margin:var(--sp-3) 0 var(--sp-1)}
+
+  button{cursor:pointer;border:1px solid var(--border);background:var(--surface-2);
+    color:var(--text);border-radius:var(--r-sm);padding:8px 12px;font:inherit;
+    transition:border-color var(--t-fast),background var(--t-fast)}
+  button:hover{border-color:var(--accent-hover);background:var(--surface-3)}
+  button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+  button.primary:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
+  button.mini{padding:4px 9px;font-size:var(--fs-200)}
+  button.ghost{background:transparent}
+  button.danger:hover{border-color:var(--st-alert);color:var(--st-alert)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .kbd{font:var(--fs-200)/1 var(--mono);opacity:.85;margin-left:6px}
+
+  /* ---- Agent card ---- */
+  .agent{position:relative;background:var(--surface-2);border:1px solid var(--border);
+    border-radius:var(--r-md);
+    padding:var(--sp-3) var(--sp-3) var(--sp-3) calc(var(--sp-3) + 4px);
+    display:flex;flex-direction:column;gap:var(--sp-2)}
+  .agent::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;
+    border-radius:var(--r-md) 0 0 var(--r-md);background:var(--st-off)}
+  .agent[data-s="busy"]::before{background:var(--st-busy)}
+  .agent[data-s="idle"]::before{background:var(--st-ok)}
+  .agent[data-s="offline"]::before{background:var(--st-off)}
+  .agent.attn::before{background:var(--st-alert)}
+  .agent.attn{border-color:var(--st-alert);box-shadow:0 0 0 1px var(--st-alert) inset}
+  .agent.offline{opacity:.7}
+  .agent .top{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2)}
+  .agent .name{font-weight:600;font-size:var(--fs-500)}
+  .agent .role{color:var(--text-dim);font-size:var(--fs-300)}
+  .agent .path{color:var(--text-faint);font-size:var(--fs-200);font-family:var(--mono);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .agent .cur{display:flex;align-items:center;gap:8px;font-size:var(--fs-300);
+    color:var(--accent);background:var(--accent-soft);border-radius:var(--r-sm);padding:6px 8px}
+  .agent .cur .desc{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .agent .cur-idle{color:var(--text-faint);font-size:var(--fs-300);font-style:italic}
+  .agent .elapsed{color:var(--text-dim);font-variant-numeric:tabular-nums;
+    font-family:var(--mono);font-size:var(--fs-200);white-space:nowrap}
+  .agent .reply{display:flex;gap:6px}
+  .agent .reply input{font-size:var(--fs-300)}
+  .agent .reply button{flex:none}
+  .agent .actions{display:flex;gap:6px;justify-content:flex-end}
+
+  /* ---- Tasks table ---- */
+  .tasks{width:100%;border-collapse:collapse}
+  .tasks th{text-align:left;padding:8px;font-size:var(--fs-200);text-transform:uppercase;
+    letter-spacing:.05em;color:var(--text-dim);border-bottom:1px solid var(--border)}
+  .tasks td{padding:10px 8px;border-bottom:1px solid var(--border);vertical-align:top;font-size:var(--fs-400)}
+  .tasks tr{transition:background var(--t-fast)}
+  .tasks tbody tr:hover{background:var(--surface-2)}
+  .tasks .id{font-family:var(--mono);color:var(--text-dim);white-space:nowrap}
+  .tasks .time{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--text-dim);white-space:nowrap}
+  .tasks .desc{color:var(--text);max-width:480px;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .tasks tbody td:first-child{border-left:3px solid var(--st-wait)}
+  .tasks tbody tr[data-s="running"]  td:first-child{border-left-color:var(--st-busy)}
+  .tasks tbody tr[data-s="done"]     td:first-child{border-left-color:var(--st-ok)}
+  .tasks tbody tr[data-s="failed"]   td:first-child{border-left-color:var(--st-alert)}
+  .tasks tbody tr[data-s="canceled"] td:first-child{border-left-color:var(--st-off)}
+  .tasks tbody tr[data-s="pending"]  td:first-child{border-left-color:var(--st-wait)}
+
+  @media (max-width:640px){
+    .tasks thead{display:none}
+    .tasks,.tasks tbody,.tasks tr,.tasks td{display:block;width:100%}
+    .tasks tbody tr{border:1px solid var(--border);border-radius:var(--r-md);
+      margin-bottom:var(--sp-2);padding:var(--sp-2);background:var(--surface-2)}
+    .tasks td{border:none;padding:4px 0}
+    .tasks tbody td:first-child{border-left:none}
+    .tasks .desc{max-width:none}
+    .tasks td[data-label]:not([data-label=""])::before{content:attr(data-label) "  ";color:var(--text-dim);
+      font-size:var(--fs-200);text-transform:uppercase;letter-spacing:.05em;margin-right:4px}
+  }
+
+  /* ---- Compose ---- */
+  .compose .meta{display:flex;align-items:center;gap:var(--sp-2);margin-top:var(--sp-3);flex-wrap:wrap}
+  .compose .count{color:var(--text-faint);font-size:var(--fs-200);margin-right:auto}
+
+  /* ---- Documents ---- */
+  .doclist{display:flex;flex-direction:column;gap:6px;margin:var(--sp-2) 0}
+  .docrow{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);
+    padding:7px 9px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-sm)}
+  .docrow .docmeta{display:flex;gap:8px;align-items:baseline;min-width:0}
+  .docrow .name{font-family:var(--mono);font-size:var(--fs-300);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .docrow .meta{color:var(--text-faint);font-size:var(--fs-200);white-space:nowrap}
+  .dropzone{margin-top:var(--sp-2);padding:var(--sp-4);text-align:center;
+    border:1.5px dashed var(--border-strong);border-radius:var(--r-md);
+    color:var(--text-dim);font-size:var(--fs-300);cursor:pointer}
+  .dropzone:hover{border-color:var(--accent)}
+  .dropzone.drag{border-color:var(--accent);background:var(--accent-soft);color:var(--text)}
+  .dropzone .link{color:var(--accent);text-decoration:underline}
+
+  /* ---- Log modal (native dialog) ---- */
+  dialog.logbox{padding:0;border:1px solid var(--border);border-radius:var(--r-lg);
+    background:var(--surface-1);color:var(--text);width:min(960px,94vw);max-height:86vh;
+    box-shadow:var(--sh-pop)}
+  dialog.logbox::backdrop{background:var(--scrim)}
+  .logbox .hd{display:flex;align-items:center;gap:var(--sp-2);padding:10px var(--sp-4);
+    border-bottom:1px solid var(--border)}
+  .logbox .hd .title{font-weight:600;margin-right:auto}
+  .logbox pre{margin:0;padding:var(--sp-4);overflow:auto;max-height:74vh;
+    font:var(--fs-300)/1.55 var(--mono);color:#d6dbe6;white-space:pre;word-break:normal}
+  .logbox pre.wrap{white-space:pre-wrap;word-break:break-word}
+  #logFollow.active{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+
+  /* ---- Shortcuts cheat-sheet ---- */
+  dialog.cheat{padding:var(--sp-5);border:1px solid var(--border);border-radius:var(--r-lg);
+    background:var(--surface-1);color:var(--text);width:min(420px,92vw);box-shadow:var(--sh-pop)}
+  dialog.cheat::backdrop{background:var(--scrim)}
+  .cheat h2{margin:0 0 var(--sp-4);font-size:var(--fs-600)}
+  .cheat dl{display:grid;grid-template-columns:auto 1fr;gap:var(--sp-2) var(--sp-4);margin:0}
+  .cheat dt{font-family:var(--mono);color:var(--accent)}
+  .cheat dd{margin:0;color:var(--text-dim)}
+  .cheat .close-row{margin-top:var(--sp-5);text-align:right}
+
+  /* ---- Toasts ---- */
+  .toasts{position:fixed;right:var(--sp-4);bottom:var(--sp-4);z-index:40;
+    display:flex;flex-direction:column;gap:var(--sp-2);max-width:340px}
+  .toast{padding:10px 12px;border-radius:var(--r-md);background:var(--surface-3);
+    border:1px solid var(--border);box-shadow:var(--sh-2);font-size:var(--fs-400);
+    animation:slidein var(--t-med) var(--ease)}
+  .toast.ok{border-left:3px solid var(--st-ok)}
+  .toast.err{border-left:3px solid var(--st-alert)}
+  @keyframes slidein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+  /* ---- Skeleton & empty states ---- */
+  .skel{background:linear-gradient(90deg,var(--surface-2),var(--surface-3),var(--surface-2));
+    background-size:200% 100%;animation:shimmer 1.2s linear infinite;border-radius:var(--r-sm)}
+  @keyframes shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
+  .empty{padding:var(--sp-6);text-align:center;color:var(--text-dim);font-size:var(--fs-400)}
+
+  /* ---- Footer ---- */
+  .foot{margin-top:var(--sp-5);text-align:center;color:var(--text-faint);font-size:var(--fs-200)}
+  .foot b{color:var(--text-dim);font-family:var(--mono);font-weight:400}
 </style>
 </head>
 <body>
-<header>
-  <span class="dot" id="livedot"></span>
+<header class="header">
+  <span class="livedot loading" id="livedot" title="Connecting…" aria-label="connection status"></span>
   <h1>Claude Fleet</h1>
-  <span class="sub" id="summary">loading…</span>
+  <span class="sub" id="summary" aria-live="polite">loading…</span>
+  <button class="poll" id="poll" type="button" title="Seconds since last update — click to refresh now" aria-label="refresh now">⟳ <span id="pollTime">0:00</span></button>
 </header>
-<div id="attention" class="attention" hidden aria-live="polite"></div>
 
-<main>
-  <section>
-    <div class="card">
-      <h2>New task</h2>
-      <label for="agent">Agent</label>
-      <select id="agent"></select>
-      <label for="desc">Task</label>
-      <textarea id="desc" placeholder="Describe what this agent should do…"></textarea>
-      <button class="primary" id="addBtn">Queue task</button>
-    </div>
-    <div class="card">
-      <h2>Agents</h2>
-      <div id="agents"></div>
-    </div>
-    <div class="card">
-      <h2>Documents</h2>
-      <label for="docScope">Scope</label>
-      <select id="docScope"></select>
-      <div id="docList" class="doclist"></div>
-      <div class="upload">
-        <input type="file" id="docFile">
-        <button class="mini" id="docUpload">Upload</button>
-      </div>
-    </div>
-  </section>
+<div class="shell">
+  <div class="conn-banner" id="connBanner" hidden role="status">Connection lost — retrying…</div>
+  <div id="attention" class="attention" hidden aria-live="assertive"></div>
 
-  <section>
-    <div class="card">
-      <h2>Tasks</h2>
-      <table>
-        <thead><tr><th>ID</th><th>Agent</th><th>Status</th><th>Time</th><th>Task</th><th></th></tr></thead>
-        <tbody id="tasks"></tbody>
-      </table>
-    </div>
-  </section>
-</main>
+  <div class="layout">
+    <div class="primary">
+      <section class="card">
+        <div class="section-head"><h2>Agents</h2></div>
+        <div id="agents" class="agents-grid"></div>
+      </section>
 
-<div class="modal" id="modal">
-  <div class="box">
-    <div class="hd"><strong id="modalTitle">Log</strong><button class="mini" onclick="closeModal()">close</button></div>
-    <pre id="modalBody">…</pre>
+      <section class="card">
+        <div class="section-head"><h2>Tasks</h2></div>
+        <table class="tasks">
+          <thead><tr><th>ID</th><th>Agent</th><th>Status</th><th>Time</th><th>Task</th><th></th></tr></thead>
+          <tbody id="tasks"></tbody>
+        </table>
+      </section>
+    </div>
+
+    <aside class="rail">
+      <section class="card compose">
+        <div class="section-head"><h2>New task</h2></div>
+        <label for="agent">Agent</label>
+        <select id="agent" aria-label="target agent"></select>
+        <label for="desc">Task</label>
+        <textarea id="desc" placeholder="Describe what this agent should do…"></textarea>
+        <div class="meta">
+          <span class="count" id="charCount">0 chars</span>
+          <button class="mini ghost" id="insertDocBtn" type="button">+ insert doc</button>
+          <button class="primary" id="addBtn" type="button" disabled>Queue task<span class="kbd">⌘⏎</span></button>
+        </div>
+      </section>
+
+      <section class="card docs-card">
+        <div class="section-head"><h2>Documents</h2></div>
+        <label for="docScope">Scope</label>
+        <select id="docScope"></select>
+        <div id="docList" class="doclist"></div>
+        <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload a document — drop a file or activate to browse">
+          ⤓ Drop a file here, or <span class="link">browse</span>
+        </div>
+        <input type="file" id="docFile" hidden>
+      </section>
+    </aside>
   </div>
+
+  <footer class="foot">Shortcuts: <b>n</b> new task · <b>r</b> refresh · <b>?</b> all shortcuts</footer>
 </div>
+
+<dialog class="logbox" id="logbox" aria-label="log viewer">
+  <div class="hd">
+    <span class="title" id="logTitle">Log</span>
+    <button class="mini" id="logCopy" type="button">Copy</button>
+    <button class="mini" id="logWrap" type="button">Wrap</button>
+    <button class="mini" id="logRefresh" type="button" title="Refresh" aria-label="refresh log">⟳</button>
+    <button class="mini" id="logFollow" type="button" title="Auto-refresh every 2s">Follow</button>
+    <button class="mini" id="logClose" type="button" title="Close" aria-label="close">✕</button>
+  </div>
+  <pre id="logBody">…</pre>
+</dialog>
+
+<dialog class="cheat" id="cheat" aria-label="keyboard shortcuts">
+  <h2>Keyboard shortcuts</h2>
+  <dl>
+    <dt>n &nbsp;/</dt><dd>Focus the New-task box</dd>
+    <dt>⌘/Ctrl + ⏎</dt><dd>Queue task</dd>
+    <dt>⏎</dt><dd>Send message (in an agent box)</dd>
+    <dt>r</dt><dd>Refresh now</dd>
+    <dt>Esc</dt><dd>Close a dialog</dd>
+    <dt>?</dt><dd>Toggle this help</dd>
+  </dl>
+  <div class="close-row"><button class="mini" id="cheatClose" type="button">Close</button></div>
+</dialog>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
 
 <script>
 const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+
 let agentsCache = [];
+let docCache = [];
+let lastPollAt = Date.now();
 
 async function api(path, opts){ const r = await fetch(path, opts); return r.json(); }
 
-function badge(act){ return `<span class="badge b-${act}"><span class="d"></span>${act}</span>`; }
-function pill(s){ return `<span class="pill p-${s}">${s}</span>`; }
-function esc(x){ return (x||"").replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+// Escape every API string before interpolating it — the XSS guard. (& < > ").
+function esc(x){ return (x||"").replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+const AGENT_GLYPH = {pending:'⋯',running:'◐',done:'✓',failed:'✕',canceled:'⊘'};
+function badge(act){ return `<span class="badge" data-s="${act}" aria-label="status: ${act}"><span class="d"></span>${act}</span>`; }
+function pill(s){
+  const g = AGENT_GLYPH[s] || '';
+  const cls = s==='running' ? 'spin' : '';
+  return `<span class="pill" data-s="${s}" aria-label="status: ${s}"><span class="${cls}" aria-hidden="true">${g}</span>${s}</span>`;
+}
 
 // "1m 20s" style duration between two ISO times (or now if `to` is null).
 function dur(from, to){
@@ -141,35 +410,69 @@ function dur(from, to){
   const m = Math.floor(s/60); if(m < 60) return m+"m "+(s%60)+"s";
   const h = Math.floor(m/60); return h+"h "+(m%60)+"m";
 }
+function mmss(sec){ return Math.floor(sec/60)+":"+String(sec%60).padStart(2,"0"); }
+
+function fmtSize(n){
+  if(n < 1024) return n+" B";
+  if(n < 1048576) return (n/1024).toFixed(1)+" KB";
+  return (n/1048576).toFixed(1)+" MB";
+}
+
+/* ---------- Agents ---------- */
+const AGENT_ORDER = {attn:0, busy:1, idle:2, offline:3};
+function agentRank(a){ const r = AGENT_ORDER[a.attention ? 'attn' : a.activity]; return r===undefined ? 9 : r; }
+
+function agentCard(a){
+  const s = a.attention ? 'attn' : a.activity;
+  const off = a.activity === 'offline';
+  const statusBadge = a.attention
+    ? `<span class="badge" data-s="attn" aria-label="status: needs you"><span class="d"></span>needs you</span>`
+    : badge(a.activity);
+  let cur = '';
+  if(a.current_task){
+    cur = `<div class="cur"><span aria-hidden="true">▶</span>
+      <span class="desc" title="${esc(a.current_desc||'')}">${esc(a.current_task)} · ${esc(a.current_desc||'')}</span>
+      <span class="elapsed" data-since="${esc(a.current_started||'')}">${a.current_started?'· '+dur(a.current_started,null):''}</span></div>`;
+  } else if(a.activity === 'idle'){
+    cur = `<div class="cur-idle">idle · waiting for work</div>`;
+  }
+  return `
+    <div class="agent${a.attention?' attn':''}${off?' offline':''}" data-s="${s}" data-name="${esc(a.name)}">
+      <div class="top">
+        <span class="name">${esc(a.name)}</span>
+        ${statusBadge}
+      </div>
+      <div class="role">${a.role ? esc(a.role) : '<span class="muted">no role set</span>'}</div>
+      <div class="path" title="${esc(a.project_dir)}">${esc(a.project_dir)}</div>
+      ${cur}
+      <div class="reply">
+        <input aria-label="message ${esc(a.name)}" placeholder="message ${esc(a.name)}…" data-name="${esc(a.name)}">
+        <button class="mini" data-act="send" data-name="${esc(a.name)}"${off?' disabled title="agent is offline"':''}>Send</button>
+      </div>
+      <div class="actions">
+        <button class="mini ghost" data-act="log" data-name="${esc(a.name)}">⧉ live log</button>
+        <button class="mini ghost danger" data-act="restart" data-name="${esc(a.name)}">⟲ restart</button>
+      </div>
+    </div>`;
+}
 
 function renderAgents(agents){
   agentsCache = agents;
-  $("#agents").innerHTML = agents.map(a => `
-    <div class="agent${a.attention?' attn':''}">
-      <div class="top"><span class="name">${esc(a.name)}</span>
-        ${a.attention ? '<span class="badge b-attn"><span class="d"></span>needs you</span>' : badge(a.activity)}</div>
-      <div class="role">${esc(a.role)||'<span class="muted">no role set</span>'}</div>
-      <div class="path">${esc(a.project_dir)}</div>
-      ${a.current_task ? `<div class="cur">▶ ${a.current_task}: ${esc(a.current_desc||'')}
-        <span class="elapsed" data-since="${a.current_started||''}">${a.current_started?'· '+dur(a.current_started,null):''}</span></div>` : ''}
-      <div class="reply">
-        <input placeholder="message ${esc(a.name)}…" onkeydown="if(event.key==='Enter')sendMsg('${a.name}',this)">
-        <button class="mini" onclick="sendMsg('${a.name}',this.previousElementSibling)">send</button>
-      </div>
-      <div class="row-actions" style="margin-top:8px">
-        <button class="mini" onclick="liveLog('${a.name}')">live log</button>
-        <button class="mini" onclick="restart('${a.name}')">restart</button>
-      </div>
-    </div>`).join("");
-  // keep the agent dropdown in sync
+  const grid = $("#agents");
+  if(!agents.length){
+    grid.innerHTML = `<div class="empty">No agents configured. Edit fleet.json and run ./fleet up.</div>`;
+  } else {
+    const sorted = agents.slice().sort((x,y)=> agentRank(x)-agentRank(y) || String(x.name).localeCompare(String(y.name)));
+    grid.innerHTML = sorted.map(agentCard).join("");
+  }
+  // keep the agent dropdown in sync, preserving the current selection
   const sel = $("#agent"), prev = sel.value;
   sel.innerHTML = agents.map(a=>`<option value="${esc(a.name)}">${esc(a.name)}</option>`).join("");
-  if ([...sel.options].some(o=>o.value===prev)) sel.value = prev;
+  if([...sel.options].some(o=>o.value===prev)) sel.value = prev;
   renderDocScopes(agents);
 }
 
-let docCache = [];
-
+/* ---------- Documents ---------- */
 function docScopeValue(){
   const v = $("#docScope").value;
   return v === "__shared__" ? {scope:"shared"} : {scope:"agent", name:v};
@@ -182,39 +485,33 @@ function renderDocScopes(agents){
   if([...sel.options].some(o=>o.value===prev)) sel.value = prev;
 }
 
-function fmtSize(n){
-  if(n < 1024) return n+" B";
-  if(n < 1048576) return (n/1024).toFixed(1)+" KB";
-  return (n/1048576).toFixed(1)+" MB";
-}
-
 async function refreshDocs(){
   const s = docScopeValue();
-  const q = s.scope==="shared" ? "scope=shared"
-    : "scope=agent&name="+encodeURIComponent(s.name);
+  const q = s.scope==="shared" ? "scope=shared" : "scope=agent&name="+encodeURIComponent(s.name);
   const r = await api("/api/docs?"+q);
   docCache = r.files || [];
   $("#docList").innerHTML = docCache.length ? docCache.map((f,i)=>`
     <div class="docrow">
-      <div class="docmeta"><span class="docname">${esc(f.name)}</span>
-        <span class="muted">${fmtSize(f.size)} · ${esc(new Date(f.modified).toLocaleDateString())}</span></div>
+      <div class="docmeta"><span class="name" title="${esc(f.name)}">${esc(f.name)}</span>
+        <span class="meta">${fmtSize(f.size)} · ${esc(new Date(f.modified).toLocaleDateString())}</span></div>
       <div class="row-actions">
-        <button class="mini" onclick="insertDocPath(${i})">insert</button>
-        <button class="mini" onclick="deleteDoc(${i})">delete</button>
+        <button class="mini" data-act="insert" data-i="${i}">insert</button>
+        <button class="mini danger" data-act="delete" data-i="${i}">delete</button>
       </div>
-    </div>`).join("") : `<div class="muted">No documents.</div>`;
+    </div>`).join("") : `<div class="empty">No documents in this scope. Drop a file to add one.</div>`;
 }
 
 function insertDocPath(i){
-  const ta = $("#desc"), path = docCache[i].path;
+  const f = docCache[i]; if(!f) return;
+  const ta = $("#desc");
   const sep = ta.value && !ta.value.endsWith("\n") ? "\n" : "";
-  ta.value += sep + path; ta.focus();
+  ta.value += sep + f.path; ta.focus(); updateCompose();
 }
 
-async function uploadDoc(){
-  const inp = $("#docFile"), file = inp.files[0];
+// Shared upload path — used by both drop and the file picker.
+async function uploadFile(file){
   if(!file) return;
-  if(file.size > 25 * 1024 * 1024){ alert("File is too large (max 25 MB)."); return; }
+  if(file.size > 25 * 1024 * 1024){ toast("File is too large (max 25 MB).", "err"); return; }
   let b64;
   try {
     b64 = await new Promise((res,rej)=>{
@@ -223,120 +520,313 @@ async function uploadDoc(){
       fr.onerror = rej;
       fr.readAsDataURL(file);
     });
-  } catch(e) { alert("Could not read file: " + (e.message||e)); return; }
+  } catch(e) { toast("Could not read file: " + (e.message||e), "err"); return; }
   const r = await api("/api/docs/upload",{method:"POST",headers:{'Content-Type':'application/json'},
     body: JSON.stringify({...docScopeValue(), filename:file.name, content_base64:b64})});
-  if(r.error){ alert(r.error); return; }
-  inp.value = ""; refreshDocs();
+  if(r.error){ toast(r.error, "err"); return; }
+  toast("Uploaded "+file.name); refreshDocs();
 }
 
 async function deleteDoc(i){
-  const f = docCache[i];
+  const f = docCache[i]; if(!f) return;
   if(!confirm("Delete "+f.name+"?")) return;
   const r = await api("/api/docs/delete",{method:"POST",headers:{'Content-Type':'application/json'},
     body: JSON.stringify({...docScopeValue(), filename:f.name})});
-  if(r && r.error){ alert(r.error); }
-  refreshDocs();
+  if(r && r.error){ toast(r.error, "err"); return; }
+  toast("Deleted "+f.name); refreshDocs();
 }
 
+/* ---------- Tasks ---------- */
 function taskTime(t){
-  if(t.status==='running') return t.started_at ? dur(t.started_at,null) : '';
+  if(t.status==='running') return t.started_at ? dur(t.started_at,null) : '—';
   if(t.finished_at && (t.started_at||t.created_at)) return dur(t.started_at||t.created_at, t.finished_at);
-  return '';
+  return '—';
 }
 
 function renderTasks(tasks){
-  $("#tasks").innerHTML = tasks.map(t => `
-    <tr>
-      <td>${t.id}</td>
-      <td>${esc(t.agent)}</td>
-      <td>${pill(t.status)}</td>
-      <td class="elapsed" data-running="${t.status==='running'?(t.started_at||''):''}">${taskTime(t)}</td>
-      <td class="desc">${esc(t.description)}</td>
-      <td><div class="row-actions">
-        <button class="mini" onclick="taskLog('${t.id}')">log</button>
-        ${t.status==='pending' ? `<button class="mini" onclick="cancel('${t.id}')">cancel</button>`:''}
-      </div></td>
-    </tr>`).join("") || `<tr><td colspan="6" class="muted">No tasks yet.</td></tr>`;
+  const tb = $("#tasks");
+  if(!tasks.length){
+    tb.innerHTML = `<tr><td colspan="6"><div class="empty">No tasks yet — queue one from “New task”.</div></td></tr>`;
+    return;
+  }
+  tb.innerHTML = tasks.map(t => `
+    <tr data-s="${t.status}">
+      <td class="id" data-label="ID">${esc(t.id)}</td>
+      <td data-label="Agent">${esc(t.agent)}</td>
+      <td data-label="Status">${pill(t.status)}</td>
+      <td class="time elapsed" data-label="Time" data-running="${t.status==='running'?esc(t.started_at||''):''}">${taskTime(t)}</td>
+      <td class="desc" data-label="Task" title="${esc(t.description)}">${esc(t.description)}</td>
+      <td data-label="" class="row-actions">
+        <button class="mini" data-act="tasklog" data-id="${esc(t.id)}">log</button>
+        ${t.status==='pending' ? `<button class="mini danger" data-act="cancel" data-id="${esc(t.id)}">cancel</button>` : ''}
+      </td>
+    </tr>`).join("");
 }
 
-// Is the user mid-edit inside an agent reply box? If so, don't re-render the
-// agents column out from under them on the next poll.
-function typingInAgents(){
-  const el = document.activeElement;
-  return el && el.tagName === "INPUT" && el.closest("#agents");
-}
-
+/* ---------- Attention ---------- */
 function renderAttention(agents, tasks){
   const need = agents.filter(a=>a.attention).map(a=>a.name);
   const failed = tasks.filter(t=>t.status==='failed');
   const el = $("#attention");
-  if(!need.length && !failed.length){ el.hidden = true; return; }
-  const parts = [];
+  if(!need.length && !failed.length){ el.hidden = true; el.innerHTML = ""; return; }
+  const parts = [`<span aria-hidden="true">⚠</span>`];
   if(need.length) parts.push(`<span><strong>Needs you:</strong> ${need.map(esc).join(", ")}</span>`);
-  if(failed.length) parts.push(`<span class="chip">⚠ ${failed.length} failed task${failed.length>1?'s':''}</span>`);
+  if(failed.length) parts.push(`<span class="chip">✕ ${failed.length} failed task${failed.length>1?'s':''}</span>`);
+  if(need.length) parts.push(`<button class="mini jump" id="attnJump" type="button">Jump to first ▸</button>`);
   el.innerHTML = parts.join("");
   el.hidden = false;
+}
+
+/* ---------- Header / connection ---------- */
+function renderHeader(agents, tasks){
+  const counts = tasks.reduce((m,t)=>(m[t.status]=(m[t.status]||0)+1,m),{});
+  const attn = agents.filter(a=>a.attention).length;
+  let html = `${agents.length} agents · ${counts.running||0} running · ${counts.pending||0} pending · ${counts.done||0} done`;
+  if(attn) html += ` · <span class="needs">⚠ ${attn} need${attn>1?'':'s'} you</span>`;
+  $("#summary").innerHTML = html;
+  document.title = (attn ? `(${attn}) ` : "") + "Claude Fleet";
+}
+
+function setConnected(ok){
+  const dot = $("#livedot");
+  dot.classList.remove("loading");
+  if(ok){
+    dot.classList.remove("bad");
+    dot.title = "Connected"; dot.setAttribute("aria-label","Connected");
+    $("#connBanner").hidden = true;
+  } else {
+    dot.classList.add("bad");
+    dot.title = "Connection lost — retrying"; dot.setAttribute("aria-label","Connection lost — retrying");
+    $("#connBanner").hidden = false;
+  }
+}
+
+/* ---------- Skeletons / poll loop ---------- */
+function renderSkeletons(){
+  $("#agents").innerHTML = Array.from({length:3}).map(()=>`
+    <div class="agent">
+      <div class="skel" style="height:14px;width:45%"></div>
+      <div class="skel" style="height:10px;width:65%"></div>
+      <div class="skel" style="height:10px;width:85%"></div>
+    </div>`).join("");
+  $("#tasks").innerHTML = Array.from({length:3}).map(()=>`
+    <tr><td colspan="6"><div class="skel" style="height:16px;width:100%"></div></td></tr>`).join("");
 }
 
 async function refresh(){
   try{
     const s = await api("/api/state");
+    lastPollAt = Date.now();
     if(!typingInAgents()) renderAgents(s.agents);
     renderTasks(s.tasks);
     renderAttention(s.agents, s.tasks);
-    const counts = s.tasks.reduce((m,t)=>(m[t.status]=(m[t.status]||0)+1,m),{});
-    const attn = s.agents.filter(a=>a.attention).length;
-    $("#summary").textContent =
-      `${s.agents.length} agents · ${counts.running||0} running · ${counts.pending||0} pending · ${counts.done||0} done`
-      + (attn ? ` · ⚠ ${attn} need${attn>1?'':'s'} you` : "");
-    document.title = (attn?`(${attn}) `:"") + "Claude Fleet";
-    $("#livedot").style.background = "var(--idle)";
-  }catch(e){ $("#livedot").style.background = "var(--failed)"; }
+    renderHeader(s.agents, s.tasks);
+    setConnected(true);
+  }catch(e){
+    setConnected(false);
+  }
 }
 
-// Tick elapsed-time labels every second so durations advance between polls.
+// Is the user mid-edit inside an agent reply box? If so, don't re-render/re-sort
+// the agents grid out from under them on the next poll.
+function typingInAgents(){
+  const el = document.activeElement;
+  return el && el.tagName === "INPUT" && el.closest("#agents");
+}
+
+// Tick elapsed-time labels every second so durations advance between polls,
+// and update the "seconds since last poll" indicator.
 function tick(){
-  document.querySelectorAll('.cur .elapsed[data-since]').forEach(el=>{
+  $$('.cur .elapsed[data-since]').forEach(el=>{
     if(el.dataset.since) el.textContent = "· " + dur(el.dataset.since, null);
   });
-  document.querySelectorAll('td.elapsed[data-running]').forEach(el=>{
+  $$('td.elapsed[data-running]').forEach(el=>{
     if(el.dataset.running) el.textContent = dur(el.dataset.running, null);
   });
+  $("#pollTime").textContent = mmss(Math.max(0, Math.round((Date.now()-lastPollAt)/1000)));
 }
 
-$("#addBtn").onclick = async () => {
+/* ---------- Actions ---------- */
+function updateCompose(){
+  const v = $("#desc").value;
+  $("#charCount").textContent = v.length + " chars";
+  $("#addBtn").disabled = !v.trim();
+}
+
+async function queueTask(){
   const agent = $("#agent").value, description = $("#desc").value.trim();
   if(!description) return;
+  const btn = $("#addBtn"); btn.disabled = true;
   const r = await api("/api/tasks", {method:"POST", headers:{'Content-Type':'application/json'},
     body: JSON.stringify({agent, description})});
-  if(r.error){ alert(r.error); return; }
-  $("#desc").value = ""; refresh();
-};
+  if(r.error){ toast(r.error, "err"); btn.disabled = false; return; }
+  $("#desc").value = ""; updateCompose();
+  toast("Queued " + (r.id || "task") + " → " + agent);
+  refresh();
+}
 
 async function sendMsg(name, input){
   const message = input.value.trim();
   if(!message) return;
-  const r = await api("/api/agent/send",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({name,message})});
-  if(r.error){ alert(r.error); return; }
-  input.value = ""; refresh();
+  const r = await api("/api/agent/send",{method:"POST",headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({name,message})});
+  if(r.error){ toast(r.error, "err"); return; }
+  input.value = ""; toast("Sent to " + name); refresh();
 }
-async function cancel(id){ await api("/api/task/cancel",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); refresh(); }
-async function restart(name){ if(!confirm("Restart agent "+name+"?")) return;
-  await api("/api/agent/restart",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({name})}); refresh(); }
 
-function openModal(title, text){ $("#modalTitle").textContent=title; const b=$("#modalBody"); b.textContent=text||"(empty)"; $("#modal").classList.add("open"); b.scrollTop = b.scrollHeight; }
-function closeModal(){ $("#modal").classList.remove("open"); }
-async function taskLog(id){ const r=await api("/api/task/log?id="+encodeURIComponent(id)); openModal("Task "+id+" log", r.text); }
-async function liveLog(name){ const r=await api("/api/logs?agent="+encodeURIComponent(name)+"&lines=300"); openModal("Live: "+name, r.text); }
+async function cancel(id){
+  await api("/api/task/cancel",{method:"POST",headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({id})});
+  toast("Canceled " + id); refresh();
+}
 
-$("#modal").addEventListener("click", e=>{ if(e.target.id==="modal") closeModal(); });
-// Ctrl/Cmd+Enter queues the task from the description box.
-$("#desc").addEventListener("keydown", e=>{ if((e.ctrlKey||e.metaKey)&&e.key==="Enter") $("#addBtn").click(); });
-document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeModal(); });
-$("#docUpload").onclick = uploadDoc;
+async function restart(name){
+  if(!confirm("Restart agent "+name+"?")) return;
+  await api("/api/agent/restart",{method:"POST",headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({name})});
+  toast("Restarting " + name); refresh();
+}
+
+/* ---------- Log modal (native <dialog>) ---------- */
+let logSource = null;     // {kind:'live', name} | {kind:'task', id}
+let followTimer = null;
+
+async function fetchLogText(){
+  if(!logSource) return "";
+  if(logSource.kind === 'live'){
+    const r = await api("/api/logs?agent="+encodeURIComponent(logSource.name)+"&lines=300");
+    return r.text;
+  }
+  const r = await api("/api/task/log?id="+encodeURIComponent(logSource.id));
+  return r.text;
+}
+
+function openLog(title, text, source){
+  logSource = source;
+  $("#logTitle").textContent = title;
+  const pre = $("#logBody"); pre.textContent = text || "(empty)";
+  const dlg = $("#logbox");
+  if(!dlg.open) dlg.showModal();
+  pre.scrollTop = pre.scrollHeight;
+}
+
+async function refreshLog(){
+  const t = await fetchLogText();
+  const pre = $("#logBody"); pre.textContent = t || "(empty)";
+  pre.scrollTop = pre.scrollHeight;
+}
+
+function stopFollow(){ if(followTimer){ clearInterval(followTimer); followTimer = null; } $("#logFollow").classList.remove("active"); }
+function toggleFollow(){
+  if(followTimer){ stopFollow(); return; }
+  $("#logFollow").classList.add("active");
+  followTimer = setInterval(refreshLog, 2000);
+  refreshLog();
+}
+
+function copyLog(){
+  const text = $("#logBody").textContent;
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(()=>toast("Copied to clipboard")).catch(()=>toast("Copy failed","err"));
+  } else {
+    const range = document.createRange(); range.selectNodeContents($("#logBody"));
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    try { document.execCommand("copy"); toast("Copied to clipboard"); }
+    catch(e){ toast("Copy failed", "err"); }
+  }
+}
+
+async function taskLog(id){ const r = await api("/api/task/log?id="+encodeURIComponent(id)); openLog("Task "+id+" log", r.text, {kind:'task', id}); }
+async function liveLog(name){ const r = await api("/api/logs?agent="+encodeURIComponent(name)+"&lines=300"); openLog("Live: "+name, r.text, {kind:'live', name}); }
+
+/* ---------- Toasts ---------- */
+function toast(msg, kind='ok'){
+  const el = document.createElement('div');
+  el.className = 'toast ' + kind;
+  el.textContent = msg;
+  $("#toasts").append(el);
+  setTimeout(()=>el.remove(), kind==='err' ? 6000 : 3500);
+}
+
+/* ---------- Wiring ---------- */
+// Compose
+$("#desc").addEventListener("input", updateCompose);
+$("#desc").addEventListener("keydown", e=>{ if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){ e.preventDefault(); queueTask(); } });
+$("#addBtn").onclick = queueTask;
+$("#insertDocBtn").onclick = ()=>{ if(docCache.length) insertDocPath(0); else toast("No documents in this scope.","err"); };
+
+// Documents
 $("#docScope").addEventListener("change", refreshDocs);
-refresh().then(refreshDocs); setInterval(refresh, 2500); setInterval(tick, 1000);
+$("#docFile").addEventListener("change", e=>{ const f = e.target.files[0]; if(f) uploadFile(f); e.target.value = ""; });
+const dz = $("#dropzone");
+dz.addEventListener("click", ()=>$("#docFile").click());
+dz.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); $("#docFile").click(); } });
+['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev, e=>{ e.preventDefault(); dz.classList.add('drag'); }));
+['dragleave','drop'].forEach(ev=>dz.addEventListener(ev, e=>{ e.preventDefault(); dz.classList.remove('drag'); }));
+dz.addEventListener('drop', e=>{ const f = e.dataTransfer.files[0]; if(f) uploadFile(f); });
+
+// Delegated actions (agents / tasks / docs / attention)
+$("#agents").addEventListener("click", e=>{
+  const btn = e.target.closest("button[data-act]"); if(!btn) return;
+  const name = btn.dataset.name;
+  if(btn.dataset.act==="send"){ sendMsg(name, btn.closest(".reply").querySelector("input")); }
+  else if(btn.dataset.act==="log"){ liveLog(name); }
+  else if(btn.dataset.act==="restart"){ restart(name); }
+});
+$("#agents").addEventListener("keydown", e=>{
+  if(e.key==="Enter" && e.target.tagName==="INPUT") sendMsg(e.target.dataset.name, e.target);
+});
+$("#tasks").addEventListener("click", e=>{
+  const btn = e.target.closest("button[data-act]"); if(!btn) return;
+  if(btn.dataset.act==="tasklog") taskLog(btn.dataset.id);
+  else if(btn.dataset.act==="cancel") cancel(btn.dataset.id);
+});
+$("#docList").addEventListener("click", e=>{
+  const btn = e.target.closest("button[data-act]"); if(!btn) return;
+  const i = Number(btn.dataset.i);
+  if(btn.dataset.act==="insert") insertDocPath(i);
+  else if(btn.dataset.act==="delete") deleteDoc(i);
+});
+$("#attention").addEventListener("click", e=>{
+  if(!e.target.closest("#attnJump")) return;
+  const first = $("#agents .agent.attn");
+  if(first){ first.scrollIntoView({behavior:"smooth", block:"center"}); const inp = first.querySelector("input"); if(inp) inp.focus(); }
+});
+
+// Log dialog
+const dlg = $("#logbox");
+$("#logClose").onclick = ()=>dlg.close();
+$("#logRefresh").onclick = refreshLog;
+$("#logWrap").onclick = ()=>$("#logBody").classList.toggle("wrap");
+$("#logCopy").onclick = copyLog;
+$("#logFollow").onclick = toggleFollow;
+dlg.addEventListener("click", e=>{ if(e.target === dlg) dlg.close(); });   // backdrop click
+dlg.addEventListener("close", stopFollow);
+
+// Cheat sheet
+const cheat = $("#cheat");
+$("#cheatClose").onclick = ()=>cheat.close();
+cheat.addEventListener("click", e=>{ if(e.target === cheat) cheat.close(); });
+
+// Poll indicator doubles as a manual refresh
+$("#poll").onclick = refresh;
+
+// Global single-key shortcuts (suppressed while typing in a field)
+document.addEventListener("keydown", e=>{
+  if(e.key === "Escape") return;   // <dialog> handles Esc natively
+  const tag = document.activeElement && document.activeElement.tagName;
+  if(/^(INPUT|TEXTAREA|SELECT)$/.test(tag||"")) return;
+  if(e.key === "n" || e.key === "/"){ e.preventDefault(); $("#desc").focus(); }
+  else if(e.key === "r"){ e.preventDefault(); refresh(); }
+  else if(e.key === "?"){ e.preventDefault(); if(cheat.open) cheat.close(); else cheat.showModal(); }
+});
+
+// Boot
+renderSkeletons();
+updateCompose();
+refresh().then(refreshDocs);
+setInterval(refresh, 2500);
+setInterval(tick, 1000);
 </script>
 </body>
 </html>
