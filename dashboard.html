@@ -214,12 +214,15 @@ function insertDocPath(i){
 async function uploadDoc(){
   const inp = $("#docFile"), file = inp.files[0];
   if(!file) return;
-  const b64 = await new Promise((res,rej)=>{
-    const fr = new FileReader();
-    fr.onload = () => res(String(fr.result).split(",")[1]);
-    fr.onerror = rej;
-    fr.readAsDataURL(file);
-  });
+  let b64;
+  try {
+    b64 = await new Promise((res,rej)=>{
+      const fr = new FileReader();
+      fr.onload = () => res(String(fr.result).split(",")[1]);
+      fr.onerror = rej;
+      fr.readAsDataURL(file);
+    });
+  } catch(e) { alert("Could not read file: " + (e.message||e)); return; }
   const r = await api("/api/docs/upload",{method:"POST",headers:{'Content-Type':'application/json'},
     body: JSON.stringify({...docScopeValue(), filename:file.name, content_base64:b64})});
   if(r.error){ alert(r.error); return; }
@@ -331,7 +334,7 @@ $("#desc").addEventListener("keydown", e=>{ if((e.ctrlKey||e.metaKey)&&e.key==="
 document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeModal(); });
 $("#docUpload").onclick = uploadDoc;
 $("#docScope").addEventListener("change", refreshDocs);
-refresh(); refreshDocs(); setInterval(refresh, 2500); setInterval(tick, 1000);
+refresh().then(refreshDocs); setInterval(refresh, 2500); setInterval(tick, 1000);
 </script>
 </body>
 </html>
