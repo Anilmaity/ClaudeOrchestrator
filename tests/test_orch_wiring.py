@@ -30,3 +30,13 @@ def test_send_delegates(monkeypatch):
     monkeypatch.setattr(orch, "_backend", fb)
     orch._send_text("w1", "hello")
     assert fb.sent == [("w1", "hello")]
+
+import fleet
+
+def test_fleet_uses_backend_for_activity(monkeypatch):
+    fb = FakeBackend()
+    monkeypatch.setattr(orch, "_backend", fb)
+    # agent_activity reads orch._capture -> backend.capture ('esc to interrupt')
+    assert fleet.agent_activity("w1") == "busy"
+    fb.capture = lambda n, lines=200: "? for shortcuts"
+    assert fleet.agent_activity("w1") == "idle"

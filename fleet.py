@@ -94,8 +94,8 @@ def ensure_agent(agent: dict) -> str:
     if not proj.is_dir():
         return f"SKIPPED (project_dir missing: {proj})"
 
-    orch._tmux("set-option", "-g", "history-limit", "5000")
-    ready, err = orch._spawn_window(name, str(proj), _role_file(agent))
+    orch._backend.set_scrollback(5000)
+    ready, err = orch._backend.spawn(name, str(proj), _role_file(agent))
     if err:
         return f"FAILED ({err})"
     return "ready" if ready else "started (not confirmed ready)"
@@ -419,7 +419,7 @@ class Handler(BaseHTTPRequestHandler):
         elif u.path == "/api/agent/restart":
             name = (body.get("name") or "").strip()
             if orch._window_exists(name):
-                orch._tmux("kill-window", "-t", orch._target(name))
+                orch._backend.kill(name)
             self._json({"ok": True})
         else:
             self._json({"error": "not found"}, 404)
@@ -429,8 +429,8 @@ class Handler(BaseHTTPRequestHandler):
 # commands
 # --------------------------------------------------------------------------- #
 def cmd_up(a: argparse.Namespace) -> None:
-    if not orch._have_tmux():
-        orch._die("tmux is not installed. Run: sudo apt install -y tmux")
+    if not orch._backend.available():
+        orch._die(orch._backend.install_hint())
     global AGENTS
     AGENTS = load_config()
 
@@ -501,7 +501,7 @@ def cmd_cancel(a: argparse.Namespace) -> None:
 
 def cmd_down(a: argparse.Namespace) -> None:
     if orch._session_exists():
-        orch._tmux("kill-session", "-t", orch.SESSION)
+        orch._backend.kill_all()
         print("stopped all agent terminals")
     else:
         print("no agents running")
