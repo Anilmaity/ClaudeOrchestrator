@@ -49,6 +49,7 @@ ROLES_DIR = STATE_DIR / "roles"
 POLL = 2.0          # dispatcher poll interval (seconds)
 DELIVER_GRACE = 10  # if an agent never goes busy this long after dispatch, retry
 MAX_TRIES = 3       # give up delivering a task after this many attempts
+CONFIRM_IDLE = 2    # consecutive idle polls required before a task is called done
 
 _LOCK = threading.Lock()
 AGENTS: list[dict] = []     # active fleet, populated by `up`
@@ -347,17 +348,22 @@ class Dispatcher(threading.Thread):
                     continue
                 act = agent_activity(name)
                 if act == "busy":
-                    if not t.get("saw_busy"):
+                    if not t.get("saw_busy") or t.get("idle_seen"):
                         t["saw_busy"] = True
+                        t["idle_seen"] = 0
                         changed = True
                     continue
-                # agent is idle now:
+                # agent looks idle:
                 if t.get("saw_busy"):
-                    # it worked and returned to the prompt -> done
-                    cap = orch._capture(name, 400)
-                    _write_task_log(t["id"], cap)
-                    t.update(status="done", finished_at=_now(), log=_tail(cap))
+                    # Require CONFIRM_IDLE consecutive idle reads before declaring
+                    # done — a single dropped capture reads as idle and would end
+                    # the task early with a truncated log.
+                    t["idle_seen"] = t.get("idle_seen", 0) + 1
                     changed = True
+                    if t["idle_seen"] >= CONFIRM_IDLE:
+                        cap = orch._capture(name, 400)
+                        _write_task_log(t["id"], cap)
+                        t.update(status="done", finished_at=_now(), log=_tail(cap))
                 elif _age(t.get("started_at")) > DELIVER_GRACE:
                     # never started working -> the message likely never landed
                     if t.get("tries", 1) >= MAX_TRIES:
@@ -382,7 +388,8 @@ class Dispatcher(threading.Thread):
                 if not agent_ready(name):   # wait for a real, idle TUI prompt
                     continue
                 orch._send_text(name, _kickoff(t))
-                t.update(status="running", started_at=_now(), saw_busy=False, tries=1)
+                t.update(status="running", started_at=_now(), saw_busy=False,
+                         idle_seen=0, tries=1)
                 busy.add(name)
                 changed = True
 

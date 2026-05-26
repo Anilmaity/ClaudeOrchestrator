@@ -120,7 +120,14 @@ class WinBackend(Backend):
         port = self._port(name)
         if port is None:
             return ""
-        return _ask(port, f"CAPTURE {lines}") or ""
+        # Retry like worker_exists: a single dropped socket read must not return
+        # an empty (==idle-looking) capture, which would mark a running task done.
+        for _ in range(3):
+            out = _ask(port, f"CAPTURE {lines}", timeout=1.5)
+            if out:
+                return out
+            time.sleep(0.1)
+        return ""
 
     def send_text(self, name: str, text: str) -> None:
         port = self._port(name)
