@@ -61,3 +61,27 @@ def test_missing_worker_is_gone(tmp_path, monkeypatch):
     b = win_backend.WinBackend()
     assert b.worker_exists("ghost") is False
     assert b.list_workers() == []
+
+
+def test_spawn_launched_but_not_ready_returns_false_no_error(tmp_path, monkeypatch):
+    monkeypatch.setattr(win_backend.common, "STATE_DIR", tmp_path)
+    monkeypatch.setattr(win_backend.WinBackend, "available", lambda self: True)
+    def fake_popen(args, **kw):
+        name = args[2]
+        p = tmp_path / "win" / name / "status.json"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps({"name": name, "pid": 1, "port": 1, "ready": False}))
+        return type("P", (), {})()
+    monkeypatch.setattr(win_backend.subprocess, "Popen", fake_popen)
+    ready, err = win_backend.WinBackend().spawn("w2", str(tmp_path), ready_timeout=0.5)
+    assert ready is False
+    assert err == ""
+
+def test_spawn_host_never_starts_returns_error(tmp_path, monkeypatch):
+    monkeypatch.setattr(win_backend.common, "STATE_DIR", tmp_path)
+    monkeypatch.setattr(win_backend.WinBackend, "available", lambda self: True)
+    monkeypatch.setattr(win_backend.subprocess, "Popen",
+                        lambda *a, **k: type("P", (), {})())
+    ready, err = win_backend.WinBackend().spawn("w3", str(tmp_path), ready_timeout=0.5)
+    assert ready is False
+    assert "failed to start" in err

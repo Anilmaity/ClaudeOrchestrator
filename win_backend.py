@@ -103,7 +103,11 @@ class WinBackend(Backend):
             if st and st.get("ready"):
                 return True, ""
             time.sleep(0.4)
-        return (_read_status(name) is not None), ""
+        # timed out. Distinguish "host never launched" (hard error) from
+        # "launched but not confirmed ready" (warn + proceed, like tmux backend).
+        if _read_status(name) is None:
+            return False, "worker host failed to start (no status file written)"
+        return False, ""
 
     def capture(self, name: str, lines: int = 200) -> str:
         port = self._port(name)

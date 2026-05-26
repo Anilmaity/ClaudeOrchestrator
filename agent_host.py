@@ -168,6 +168,7 @@ def _pump(host):
     auto-accept trust/bypass dialogs + flip `ready` when the footer appears."""
     child = host.child
     accepted_bypass = False
+    accepted_trust = False
     while child.isalive():
         data = child.read(65536)
         if data:
@@ -185,9 +186,10 @@ def _pump(host):
                 accepted_bypass = True
                 time.sleep(1.0)
                 continue
-            if any(m in low for m in common.TRUST_MARKERS):
+            if not accepted_trust and any(m in low for m in common.TRUST_MARKERS):
                 child.write("\r")
                 time.sleep(0.8)
+                accepted_trust = True
                 continue
             host.mark_ready_if_seen()
             host._write_status()
