@@ -57,7 +57,7 @@
   .attention .chip{background:#3a1414;border:1px solid var(--attn);border-radius:999px;padding:2px 10px}
   .attention[hidden]{display:none}
   /* modal */
-  .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;padding:20px}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;padding:20px;z-index:10}
   .modal.open{display:flex}
   .modal .box{background:var(--panel);border:1px solid var(--line);border-radius:10px;width:min(900px,100%);max-height:85vh;display:flex;flex-direction:column}
   .modal .hd{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}
@@ -71,7 +71,7 @@
   <h1>Claude Fleet</h1>
   <span class="sub" id="summary">loading…</span>
 </header>
-<div id="attention" class="attention" hidden></div>
+<div id="attention" class="attention" hidden aria-live="polite"></div>
 
 <main>
   <section>
