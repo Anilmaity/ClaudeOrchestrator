@@ -65,14 +65,43 @@ class AgentHost:
         self._server = None
         self._pty = None
         self._started_at = common._now()
+        # All writes to the ConPTY child funnel through write(); the lock keeps
+        # concurrent writers (auto-accept pump, control-socket SEND, console
+        # keystroke forwarder) from interleaving multi-byte VT sequences.
+        self._write_lock = threading.Lock()
+        # _write_status runs from both the server thread and the pump thread;
+        # this guards the shared .tmp write/replace.
+        self._status_lock = threading.Lock()
 
     @classmethod
     def for_test(cls, child, cols=80, rows=24):
         return cls(name="test", child=child, cols=cols, rows=rows)
 
+    def write(self, data):
+        """Single serialized path to the ConPTY child. Every writer (pump
+        auto-accept, control-socket SEND, console forwarder) goes through here
+        so their writes can't interleave and corrupt VT escape sequences."""
+        with self._write_lock:
+            self.child.write(data)
+
     def mark_ready_if_seen(self):
-        if not self.ready and self.screen.contains_any(common.READY_MARKERS):
-            self.ready = True
+        # Only mark ready once the input box is actually accepting typing: a
+        # READY footer is showing AND no trust/bypass dialog is still up (those
+        # would otherwise swallow the kickoff we send right after spawn). The
+        # dialog option text ("yes, i accept", "do you trust", ...) disappears
+        # from the screen once auto-accept settles, so absence == settled.
+        if self.ready:
+            return
+        if not self.screen.contains_any(common.READY_MARKERS):
+            return
+        if self._dialog_pending():
+            return
+        self.ready = True
+
+    def _dialog_pending(self) -> bool:
+        """True while a trust/bypass dialog is still awaiting input on screen."""
+        markers = (common.BYPASS_MARKER,) + tuple(common.TRUST_MARKERS)
+        return self.screen.contains_any(markers)
 
     def state(self):
         return {"ready": self.ready, "alive": bool(self.child.isalive()),
@@ -81,7 +110,7 @@ class AgentHost:
     def inject(self, text):
         # collapse to one submitted line, like tmux send-keys -l + Enter
         one_line = " ".join(text.split())
-        self.child.write(one_line + "\r")
+        self.write(one_line + "\r")
 
     def start_server(self):
         self._server = _Server(("127.0.0.1", 0), _Handler)
@@ -100,13 +129,18 @@ class AgentHost:
     def _write_status(self):
         if not self.status_path:
             return
-        self.status_path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self.status_path.with_suffix(".tmp")
-        tmp.write_text(json.dumps({
-            "name": self.name, "pid": os.getpid(), "port": self.port,
-            "ready": self.ready, "started_at": self._started_at,
-        }))
-        tmp.replace(self.status_path)
+        # The ConPTY child (claude) is NOT an OS child of this host process, so
+        # its pid must be recorded explicitly for the backend to kill its tree.
+        child_pid = getattr(self._pty, "pid", None)
+        with self._status_lock:
+            self.status_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.status_path.with_suffix(".tmp")
+            tmp.write_text(json.dumps({
+                "name": self.name, "pid": os.getpid(), "port": self.port,
+                "child_pid": child_pid,
+                "ready": self.ready, "started_at": self._started_at,
+            }))
+            tmp.replace(self.status_path)
 
     def start_pump(self, background=False):
         """Run the pty->screen pump. background=True for tests; foreground in
@@ -127,6 +161,13 @@ class AgentHost:
                 pty.terminate(force=True)
             except Exception:
                 pass
+            # Release the winpty reader thread / socket so the host can exit
+            # cleanly even if terminate() raced or already happened.
+            if hasattr(pty, "close"):
+                try:
+                    pty.close()
+                except Exception:
+                    pass
         if self.status_path and self.status_path.exists():
             try:
                 self.status_path.unlink()
@@ -180,14 +221,14 @@ def _pump(host):
             host.screen.feed(data.encode("utf-8", "replace"))
             low = host.screen.text().lower()
             if not accepted_bypass and common.BYPASS_MARKER in low:
-                child.write("2")
+                host.write("2")
                 time.sleep(0.3)
-                child.write("\r")
+                host.write("\r")
                 accepted_bypass = True
                 time.sleep(1.0)
                 continue
             if not accepted_trust and any(m in low for m in common.TRUST_MARKERS):
-                child.write("\r")
+                host.write("\r")
                 time.sleep(0.8)
                 accepted_trust = True
                 continue
@@ -249,7 +290,7 @@ def _forward_console_input(host) -> None:
         if not data:
             continue
         try:
-            child.write(data)
+            host.write(data)
         except Exception:
             break
 

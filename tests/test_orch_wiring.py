@@ -25,6 +25,29 @@ def test_worker_state_uses_capture(monkeypatch):
     assert orch._worker_state("w1") == "idle"
     assert orch._worker_state("nope") == "gone"
 
+
+def test_done_marker_requires_line_start(monkeypatch):
+    """FIX 1: kickoff message contains 'WORKER-DONE:' mid-sentence -> NOT done."""
+    fb = FakeBackend()
+    monkeypatch.setattr(orch, "_backend", fb)
+    # Simulate scrollback that contains the kickoff instruction mid-sentence
+    kickoff_cap = (
+        "You are an autonomous worker. Read the file /tmp/task.md for your full "
+        "task. When finished, print one line starting with 'WORKER-DONE:' followed "
+        "by a short summary of what you changed."
+    )
+    fb.capture = lambda n, lines=200: kickoff_cap
+    # The kickoff has 'worker-done:' mid-sentence (after lowercasing), must NOT be "done"
+    assert orch._worker_state("w1") == "idle"
+
+    # A line that starts with the marker (after stripping) -> must be "done"
+    fb.capture = lambda n, lines=200: "some prior output\nWORKER-DONE: built it\nmore output"
+    assert orch._worker_state("w1") == "done"
+
+    # Indented marker line (lstrip should handle it) -> "done"
+    fb.capture = lambda n, lines=200: "  WORKER-DONE: finished"
+    assert orch._worker_state("w1") == "done"
+
 def test_send_delegates(monkeypatch):
     fb = FakeBackend()
     monkeypatch.setattr(orch, "_backend", fb)

@@ -246,7 +246,9 @@ def _load_tasks() -> dict:
 
 def _save_tasks(d: dict) -> None:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
-    TASKS_FILE.write_text(json.dumps(d, indent=2))
+    tmp = TASKS_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(d, indent=2))
+    tmp.replace(TASKS_FILE)
 
 
 def _tail(text: str, n: int = 160) -> str:
@@ -298,7 +300,7 @@ class Dispatcher(threading.Thread):
             try:
                 self.tick()
             except Exception as e:  # keep the loop alive
-                print(f"[dispatch] error: {e}", file=sys.stderr)
+                print(f"[dispatch] error: {e}", file=sys.stderr, flush=True)
             self.stop.wait(POLL)
 
     def _reload_agents(self) -> None:
@@ -431,101 +433,118 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         u = urlparse(self.path)
-        if u.path == "/":
-            if not DASHBOARD.exists():
-                return self._json({"error": "dashboard.html missing"}, 500)
-            body = DASHBOARD.read_bytes()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-        elif u.path == "/api/state":
-            self._json(build_state())
-        elif u.path == "/api/logs":
-            q = parse_qs(u.query)
-            name = (q.get("agent") or [""])[0]
-            lines = int((q.get("lines") or ["200"])[0])
-            if not orch._window_exists(name):
-                return self._json({"text": "(agent offline)"})
-            self._json({"text": orch._capture(name, lines)})
-        elif u.path == "/api/task/log":
-            q = parse_qs(u.query)
-            tid = (q.get("id") or [""])[0]
-            f = TASK_LOGS / f"{tid}.log"
-            text = f.read_text() if f.exists() else "(no captured log yet)"
-            self._json({"text": text})
-        elif u.path == "/api/docs":
-            q = parse_qs(u.query)
-            scope = (q.get("scope") or [""])[0]
-            name = (q.get("name") or [None])[0]
-            try:
-                self._json({"files": list_docs(scope, name)})
-            except ValueError as e:
-                self._json({"error": str(e)}, 400)
-        else:
-            self._json({"error": "not found"}, 404)
+        try:
+            if u.path == "/":
+                if not DASHBOARD.exists():
+                    return self._json({"error": "dashboard.html missing"}, 500)
+                body = DASHBOARD.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            elif u.path == "/api/state":
+                self._json(build_state())
+            elif u.path == "/api/logs":
+                q = parse_qs(u.query)
+                name = (q.get("agent") or [""])[0]
+                try:
+                    lines = int((q.get("lines") or ["200"])[0])
+                except ValueError:
+                    lines = 200
+                if not orch._window_exists(name):
+                    return self._json({"text": "(agent offline)"})
+                self._json({"text": orch._capture(name, lines)})
+            elif u.path == "/api/task/log":
+                q = parse_qs(u.query)
+                tid = (q.get("id") or [""])[0]
+                f = TASK_LOGS / f"{tid}.log"
+                text = f.read_text() if f.exists() else "(no captured log yet)"
+                self._json({"text": text})
+            elif u.path == "/api/docs":
+                q = parse_qs(u.query)
+                scope = (q.get("scope") or [""])[0]
+                name = (q.get("name") or [None])[0]
+                try:
+                    self._json({"files": list_docs(scope, name)})
+                except ValueError as e:
+                    self._json({"error": str(e)}, 400)
+            else:
+                self._json({"error": "not found"}, 404)
+        except Exception as e:
+            self._json({"error": "internal error"}, 500)
 
     def do_POST(self):
         u = urlparse(self.path)
-        body = self._read_body()
-        if u.path == "/api/tasks":
-            agent = (body.get("agent") or "").strip()
-            desc = (body.get("description") or "").strip()
-            names = {a["name"] for a in AGENTS}
-            if agent not in names:
-                return self._json({"error": "unknown agent"}, 400)
-            if not desc:
-                return self._json({"error": "empty task"}, 400)
-            self._json({"id": add_task(agent, desc)})
-        elif u.path == "/api/task/cancel":
-            ok = cancel_task((body.get("id") or "").strip())
-            self._json({"ok": ok})
-        elif u.path == "/api/agent/send":
-            name = (body.get("name") or "").strip()
-            msg = (body.get("message") or "").strip()
-            if name not in {a["name"] for a in AGENTS}:
-                return self._json({"error": "unknown agent"}, 400)
-            if not msg:
-                return self._json({"error": "empty message"}, 400)
-            self._json({"ok": send_message(name, msg)})
-        elif u.path == "/api/agent/restart":
-            name = (body.get("name") or "").strip()
-            if orch._window_exists(name):
-                orch._backend.kill(name)
-            self._json({"ok": True})
-        elif u.path == "/api/docs/upload":
-            scope = (body.get("scope") or "").strip()
-            name = body.get("name") or None
-            filename = (body.get("filename") or "").strip()
-            try:
-                data = base64.b64decode(body.get("content_base64") or "")
-            except Exception:
-                return self._json({"error": "bad base64 content"}, 400)
-            try:
-                self._json({"file": save_doc(scope, name, filename, data)})
-            except ValueError as e:
-                self._json({"error": str(e)}, 400)
-            except OSError:
-                self._json({"error": "storage error"}, 500)
-        elif u.path == "/api/docs/delete":
-            scope = (body.get("scope") or "").strip()
-            name = body.get("name") or None
-            filename = (body.get("filename") or "").strip()
-            try:
-                self._json({"ok": delete_doc(scope, name, filename)})
-            except ValueError as e:
-                self._json({"error": str(e)}, 400)
-            except OSError:
-                self._json({"error": "storage error"}, 500)
-        else:
-            self._json({"error": "not found"}, 404)
+        cl = int(self.headers.get("Content-Length", 0) or 0)
+        if cl > MAX_REQUEST_BYTES:
+            return self._json({"error": "request too large"}, 413)
+        try:
+            body = self._read_body()
+            if u.path == "/api/tasks":
+                agent = (body.get("agent") or "").strip()
+                desc = (body.get("description") or "").strip()
+                names = {a["name"] for a in AGENTS}
+                if agent not in names:
+                    return self._json({"error": "unknown agent"}, 400)
+                if not desc:
+                    return self._json({"error": "empty task"}, 400)
+                self._json({"id": add_task(agent, desc)})
+            elif u.path == "/api/task/cancel":
+                ok = cancel_task((body.get("id") or "").strip())
+                self._json({"ok": ok})
+            elif u.path == "/api/agent/send":
+                name = (body.get("name") or "").strip()
+                msg = (body.get("message") or "").strip()
+                if name not in {a["name"] for a in AGENTS}:
+                    return self._json({"error": "unknown agent"}, 400)
+                if not msg:
+                    return self._json({"error": "empty message"}, 400)
+                self._json({"ok": send_message(name, msg)})
+            elif u.path == "/api/agent/restart":
+                name = (body.get("name") or "").strip()
+                if orch._window_exists(name):
+                    orch._backend.kill(name)
+                self._json({"ok": True})
+            elif u.path == "/api/docs/upload":
+                scope = (body.get("scope") or "").strip()
+                name = body.get("name") or None
+                filename = (body.get("filename") or "").strip()
+                try:
+                    data = base64.b64decode(body.get("content_base64") or "")
+                except Exception:
+                    return self._json({"error": "bad base64 content"}, 400)
+                try:
+                    self._json({"file": save_doc(scope, name, filename, data)})
+                except ValueError as e:
+                    self._json({"error": str(e)}, 400)
+                except OSError:
+                    self._json({"error": "storage error"}, 500)
+            elif u.path == "/api/docs/delete":
+                scope = (body.get("scope") or "").strip()
+                name = body.get("name") or None
+                filename = (body.get("filename") or "").strip()
+                try:
+                    self._json({"ok": delete_doc(scope, name, filename)})
+                except ValueError as e:
+                    self._json({"error": str(e)}, 400)
+                except OSError:
+                    self._json({"error": "storage error"}, 500)
+            else:
+                self._json({"error": "not found"}, 404)
+        except Exception as e:
+            self._json({"error": "internal error"}, 500)
 
 
 # --------------------------------------------------------------------------- #
 # commands
 # --------------------------------------------------------------------------- #
 def cmd_up(a: argparse.Namespace) -> None:
+    for _s in (sys.stdout, sys.stderr):
+        try:
+            _s.reconfigure(line_buffering=True)
+        except (AttributeError, ValueError):
+            pass
     if not orch._backend.available():
         orch._die(orch._backend.install_hint())
     global AGENTS

@@ -122,14 +122,44 @@ class WinBackend(Backend):
 
     def kill(self, name: str) -> None:
         st = _read_status(name)
-        if st:
-            port, pid = st.get("port"), st.get("pid")
-            if port:
-                _ask(port, "STOP", timeout=2.0)
+        if not st:
+            # No status file: nothing to reap, nothing to clean up.
+            return
+        port = st.get("port")
+        pid = st.get("pid")             # the python host process
+        child_pid = st.get("child_pid")  # claude, running inside the ConPTY
+
+        def _taskkill_trees():
+            # Kill the ConPTY child tree FIRST (claude is not an OS child of the
+            # host, so killing the host alone leaves it alive answering PING),
+            # then the host tree.
+            for target in (child_pid, pid):
+                if target:
+                    subprocess.run(
+                        ["taskkill", "/PID", str(target), "/F", "/T"],
+                        capture_output=True)
+
+        def _still_responding() -> bool:
+            return port is not None and _ask(port, "PING", timeout=1.0) is not None
+
+        # Ask the host to stop gracefully, then force-kill both trees.
+        if port:
+            _ask(port, "STOP", timeout=2.0)
+        time.sleep(0.3)
+        _taskkill_trees()
+
+        # Verify death: only delete the status file once it no longer answers,
+        # otherwise a survivor becomes invisible to `list` but keeps responding.
+        if _still_responding():
+            time.sleep(0.5)
+            _taskkill_trees()
             time.sleep(0.3)
-            if pid:
-                subprocess.run(["taskkill", "/PID", str(pid), "/F", "/T"],
-                               capture_output=True)
+
+        if _still_responding():
+            print(f"warning: worker '{name}' still responding after kill; "
+                  f"leaving status file in place", file=sys.stderr)
+            return
+
         p = _status_path(name)
         if p.exists():
             try:

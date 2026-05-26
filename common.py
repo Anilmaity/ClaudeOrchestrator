@@ -49,6 +49,12 @@ def clean_child_env() -> dict:
     venv = env.pop("VIRTUAL_ENV", None)
     if venv:
         parts = env.get("PATH", "").split(os.pathsep)
-        drop = {str(Path(venv) / "bin"), str(Path(venv) / "Scripts")}
-        env["PATH"] = os.pathsep.join(p for p in parts if p not in drop)
+        drop = {
+            str(Path(venv) / "bin").lower().rstrip("/\\"),
+            str(Path(venv) / "Scripts").lower().rstrip("/\\"),
+        }
+        env["PATH"] = os.pathsep.join(
+            p for p in parts
+            if p.lower().rstrip("/\\") not in drop
+        )
     return env

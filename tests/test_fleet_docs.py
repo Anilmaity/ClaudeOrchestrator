@@ -63,3 +63,19 @@ def test_delete_roundtrip(docs):
     assert docs.delete_doc("shared", None, "gone.txt") is True
     assert docs.delete_doc("shared", None, "gone.txt") is False
     assert docs.list_docs("shared") == []
+
+
+def test_save_tasks_atomic_roundtrip(tmp_path, monkeypatch):
+    """_save_tasks writes atomically via tmp+replace; no leftover .tmp file."""
+    monkeypatch.setattr(fleet, "STATE_DIR", tmp_path)
+    monkeypatch.setattr(fleet, "TASKS_FILE", tmp_path / "fleet_tasks.json")
+
+    payload = {"next_id": 5, "tasks": [{"id": "1"}]}
+    fleet._save_tasks(payload)
+
+    # no leftover .tmp file
+    assert not (tmp_path / "fleet_tasks.tmp").exists()
+
+    # round-trip is lossless
+    loaded = fleet._load_tasks()
+    assert loaded == payload
