@@ -23,6 +23,8 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import os
+import subprocess
 import sys
 import threading
 import time
@@ -39,6 +41,7 @@ DASHBOARD = HERE / "dashboard.html"
 
 STATE_DIR = orch.STATE_DIR
 TASKS_FILE = STATE_DIR / "fleet_tasks.json"
+FLEET_PID = STATE_DIR / "fleet.pid"
 TASK_LOGS = STATE_DIR / "logs" / "tasks"
 ROLES_DIR = STATE_DIR / "roles"
 
@@ -539,12 +542,42 @@ class Handler(BaseHTTPRequestHandler):
 # --------------------------------------------------------------------------- #
 # commands
 # --------------------------------------------------------------------------- #
+def _pid_alive(pid: int) -> bool:
+    """Best-effort check whether a process id is currently running."""
+    if pid <= 0:
+        return False
+    if sys.platform == "win32":
+        try:
+            r = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"],
+                               capture_output=True, text=True)
+            return str(pid) in r.stdout
+        except Exception:
+            return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
 def cmd_up(a: argparse.Namespace) -> None:
     for _s in (sys.stdout, sys.stderr):
         try:
             _s.reconfigure(line_buffering=True)
         except (AttributeError, ValueError):
             pass
+    # Refuse to start a second dispatcher: two would fight over the same agents
+    # and spawn duplicate host processes.
+    if FLEET_PID.exists():
+        try:
+            old = int(FLEET_PID.read_text().strip())
+        except (ValueError, OSError):
+            old = 0
+        if _pid_alive(old):
+            orch._die(f"a fleet is already running (pid {old}). Stop it "
+                      f"(Ctrl-C) or run './fleet down', then retry.")
+    FLEET_PID.parent.mkdir(parents=True, exist_ok=True)
+    FLEET_PID.write_text(str(os.getpid()))
     if not orch._backend.available():
         orch._die(orch._backend.install_hint())
     global AGENTS
@@ -571,6 +604,10 @@ def cmd_up(a: argparse.Namespace) -> None:
     finally:
         disp.stop.set()
         srv.shutdown()
+        try:
+            FLEET_PID.unlink()
+        except OSError:
+            pass
 
 
 def cmd_status(a: argparse.Namespace) -> None:

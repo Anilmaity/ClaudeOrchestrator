@@ -80,7 +80,14 @@ class WinBackend(Backend):
         port = self._port(name)
         if port is None:
             return False
-        return _ask(port, "PING") is not None
+        # Tolerate a transient socket hiccup: one dropped PING under load must
+        # not read a live agent as dead, or the dispatcher's keep-alive loop
+        # respawns it and duplicate host processes accumulate.
+        for _ in range(3):
+            if _ask(port, "PING", timeout=1.0) is not None:
+                return True
+            time.sleep(0.1)
+        return False
 
     def spawn(self, name, project_dir, role_file="", ready_timeout=45.0):
         if not self.available():

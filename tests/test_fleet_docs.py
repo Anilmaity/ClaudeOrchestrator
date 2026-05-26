@@ -1,6 +1,15 @@
+import os
+
 import pytest
 
 import fleet
+
+
+def test_pid_alive_detects_self_and_missing():
+    assert fleet._pid_alive(os.getpid()) is True
+    assert fleet._pid_alive(0) is False
+    # A pid far above typical ranges is almost certainly not a live process.
+    assert fleet._pid_alive(2_000_000_000) is False
 
 
 @pytest.fixture
