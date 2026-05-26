@@ -51,9 +51,19 @@ def get_backend() -> Backend:
     if not choice:
         choice = "win" if sys.platform == "win32" else "tmux"
     if choice == "win":
-        import win_backend
+        try:
+            import win_backend
+        except ImportError as e:
+            raise RuntimeError(
+                f"Windows backend unavailable ({e}). Run: python -m pip install -r requirements.txt"
+            ) from e
         return win_backend.WinBackend()
     if choice == "tmux":
-        import tmux_backend
+        try:
+            import tmux_backend
+        except ImportError as e:
+            raise RuntimeError(
+                f"tmux backend unavailable ({e}). Run: python -m pip install -r requirements.txt"
+            ) from e
         return tmux_backend.TmuxBackend()
     raise ValueError(f"unknown ORCH_BACKEND {choice!r} (use 'win' or 'tmux')")

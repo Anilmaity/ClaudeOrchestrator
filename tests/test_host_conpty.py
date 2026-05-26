@@ -2,9 +2,11 @@ import json
 import socket
 import sys
 import time
+import types
 import pytest
 
 import agent_host
+import common
 
 
 class FakeChild:
@@ -44,6 +46,61 @@ def test_control_protocol_roundtrip():
         assert "do the thing" in child.written[-1]
     finally:
         host.stop_server()
+
+
+def test_write_status_records_child_pid(tmp_path):
+    # The ConPTY child pid is recorded so the backend can kill the right tree.
+    child = FakeChild()
+    status = tmp_path / "status.json"
+    host = agent_host.AgentHost(name="t", child=child, cols=40, rows=6,
+                                status_path=status)
+    host._pty = types.SimpleNamespace(pid=4321)
+    host._write_status()
+    data = json.loads(status.read_text())
+    assert data["child_pid"] == 4321
+
+
+def test_write_status_child_pid_none_without_pty(tmp_path):
+    child = FakeChild()
+    status = tmp_path / "status.json"
+    host = agent_host.AgentHost(name="t", child=child, cols=40, rows=6,
+                                status_path=status)
+    host._write_status()
+    data = json.loads(status.read_text())
+    assert data["child_pid"] is None
+
+
+def test_ready_gated_while_dialog_present():
+    # A READY footer can be on screen while a trust/bypass dialog is still up;
+    # readiness must wait until the dialog is gone so the kickoff isn't eaten.
+    child = FakeChild()
+    host = agent_host.AgentHost.for_test(child=child, cols=80, rows=10)
+    host.screen.feed(
+        ("Do you trust the files in this folder?\r\n"
+         "? for shortcuts\r\n").encode())
+    host.mark_ready_if_seen()
+    assert host.ready is False
+
+
+def test_ready_marks_once_dialog_settled():
+    child = FakeChild()
+    host = agent_host.AgentHost.for_test(child=child, cols=80, rows=10)
+    # No trust/bypass markers on screen, only the READY footer -> ready.
+    host.screen.feed(b"booting\r\n? for shortcuts\r\n")
+    host.mark_ready_if_seen()
+    assert host.ready is True
+
+
+def test_bypass_marker_blocks_ready():
+    # Sanity: the bypass option text on screen also gates readiness.
+    child = FakeChild()
+    host = agent_host.AgentHost.for_test(child=child, cols=80, rows=10)
+    host.screen.feed(
+        ("2. Yes, I accept\r\n"
+         "shift+tab to cycle\r\n").encode())
+    host.mark_ready_if_seen()
+    assert host.ready is False
+    assert common.BYPASS_MARKER == "yes, i accept"
 
 
 def test_key_to_bytes_regular_and_control():

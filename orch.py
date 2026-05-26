@@ -70,7 +70,7 @@ def _worker_state(name: str) -> str:
     cap = _capture(name, 120).lower()
     if any(m in cap for m in BUSY_MARKERS):
         return "busy"
-    if DONE_MARKER in cap:
+    if any(ln.lstrip().startswith(DONE_MARKER) for ln in cap.splitlines()):
         return "done"
     return "idle"
 
@@ -89,7 +89,9 @@ def _load() -> dict:
 
 def _save(reg: dict) -> None:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
-    REGISTRY.write_text(json.dumps(reg, indent=2))
+    tmp = REGISTRY.with_suffix(".tmp")
+    tmp.write_text(json.dumps(reg, indent=2))
+    tmp.replace(REGISTRY)
 
 
 # --------------------------------------------------------------------------- #
@@ -201,6 +203,8 @@ def cmd_wait(a: argparse.Namespace) -> None:
 
 
 def cmd_stop(a: argparse.Namespace) -> None:
+    if not a.all and not a.name:
+        _die("provide a worker name or --all")
     reg = _load()
     if a.name == "--all" or a.all:
         if _session_exists():
