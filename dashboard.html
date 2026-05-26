@@ -197,7 +197,7 @@ async function refreshDocs(){
   $("#docList").innerHTML = docCache.length ? docCache.map((f,i)=>`
     <div class="docrow">
       <div class="docmeta"><span class="docname">${esc(f.name)}</span>
-        <span class="muted">${fmtSize(f.size)}</span></div>
+        <span class="muted">${fmtSize(f.size)} · ${esc(new Date(f.modified).toLocaleDateString())}</span></div>
       <div class="row-actions">
         <button class="mini" onclick="insertDocPath(${i})">insert</button>
         <button class="mini" onclick="deleteDoc(${i})">delete</button>
@@ -214,6 +214,7 @@ function insertDocPath(i){
 async function uploadDoc(){
   const inp = $("#docFile"), file = inp.files[0];
   if(!file) return;
+  if(file.size > 25 * 1024 * 1024){ alert("File is too large (max 25 MB)."); return; }
   let b64;
   try {
     b64 = await new Promise((res,rej)=>{
@@ -232,8 +233,9 @@ async function uploadDoc(){
 async function deleteDoc(i){
   const f = docCache[i];
   if(!confirm("Delete "+f.name+"?")) return;
-  await api("/api/docs/delete",{method:"POST",headers:{'Content-Type':'application/json'},
+  const r = await api("/api/docs/delete",{method:"POST",headers:{'Content-Type':'application/json'},
     body: JSON.stringify({...docScopeValue(), filename:f.name})});
+  if(r && r.error){ alert(r.error); }
   refreshDocs();
 }
 
