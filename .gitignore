@@ -9,3 +9,6 @@ __pycache__/
 
 # Fleet uploaded documents (user data, not code)
 fleet_docs/
+
+# Git worktrees (isolated workspaces)
+.worktrees/
