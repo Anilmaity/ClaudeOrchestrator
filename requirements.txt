@@ -1,0 +1,5 @@
+# Windows backend dependencies (orchestrator)
+pywinpty>=2.0.10
+pyte>=0.8.2
+# dev
+pytest>=8.0
