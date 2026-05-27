@@ -76,7 +76,7 @@ MAX_REQUEST_BYTES = MAX_DOC_BYTES * 2     # cap POST body memory (base64+JSON ov
 def load_config(path: Path = CONFIG) -> list[dict]:
     if not path.exists():
         orch._die(f"config not found: {path}\nCreate it (see fleet.json template).")
-    data = json.loads(path.read_text())
+    data = json.loads(path.read_text(encoding="utf-8"))
     agents, seen = [], set()
     for a in data.get("agents", []):
         name = a.get("name", "")
@@ -98,7 +98,7 @@ def load_config(path: Path = CONFIG) -> list[dict]:
 def _set_agent_path(name: str, path: str) -> None:
     """Set one agent's project_dir in fleet.json (atomic) and refresh AGENTS."""
     global AGENTS
-    data = json.loads(CONFIG.read_text())
+    data = json.loads(CONFIG.read_text(encoding="utf-8"))
     found = False
     for a in data.get("agents", []):
         if a.get("name") == name:
@@ -108,7 +108,7 @@ def _set_agent_path(name: str, path: str) -> None:
     if not found:
         raise ValueError("unknown agent")
     tmp = CONFIG.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data, indent=2))
+    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
     tmp.replace(CONFIG)
     AGENTS = load_config()
 
