@@ -493,7 +493,7 @@
                         :disabled="a.activity==='offline'" :title="a.activity==='offline' ? 'agent is offline' : ''">Send</button>
               </div>
               <div class="actions">
-                <button class="mini ghost" @click="liveLog(a.name)">⧉ live log</button>
+                <button class="mini ghost" @click="copyPath(a.project_dir)" title="Copy this agent's project path">⧉ path</button>
                 <button class="mini ghost danger" @click="restart(a.name)">⟲ restart</button>
               </div>
             </div>
@@ -999,6 +999,11 @@ function fleet(){
     },
     async taskLog(id){ const r = await this.api('/api/task/log?id='+encodeURIComponent(id)); this.openLog('Task '+id+' log', r.text, {kind:'task', id}); },
     async liveLog(name){ const r = await this.api('/api/logs?agent='+encodeURIComponent(name)+'&lines=300'); this.openLog('Live: '+name, r.text, {kind:'live', name}); },
+    copyPath(p){
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(p).then(()=>this.toast('Copied path')).catch(()=>this.toast(p,'err'));
+      } else { this.toast(p); }
+    },
     stopFollow(){ if(this._followTimer){ clearInterval(this._followTimer); this._followTimer = null; } this.log.follow = false; },
     toggleFollow(){
       if(this._followTimer){ this.stopFollow(); return; }
