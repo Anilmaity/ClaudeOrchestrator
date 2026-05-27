@@ -339,8 +339,8 @@
   <div class="conn-banner" x-show="connected===false" role="status">Connection lost — retrying…</div>
 
   <div class="tabs" role="tablist">
-    <button class="tab" type="button" role="tab" :class="{active:tab==='dashboard'}" :aria-selected="tab==='dashboard'" @click="tab='dashboard'">⊞ Dashboard</button>
-    <button class="tab" type="button" role="tab" :class="{active:tab==='topology'}" :aria-selected="tab==='topology'" @click="tab='topology'">⛓ Connections</button>
+    <button class="tab" type="button" role="tab" :class="{active:tab==='dashboard'}" :aria-selected="tab==='dashboard'" @click="setTab('dashboard')">⊞ Dashboard</button>
+    <button class="tab" type="button" role="tab" :class="{active:tab==='topology'}" :aria-selected="tab==='topology'" @click="setTab('topology')">⛓ Connections</button>
   </div>
 
   <div x-show="tab==='dashboard'">
@@ -592,11 +592,18 @@ function fleet(){
 
     /* ---- lifecycle ---- */
     init(){
+      const h = location.hash.replace('#','');
+      if(h==='connections' || h==='topology') this.tab = 'topology';
       this.refresh().then(()=>this.refreshDocs());
       setInterval(()=>this.refresh(), 2500);
       setInterval(()=>{ this.now = Date.now();
         this.pollSecs = Math.max(0, Math.round((Date.now()-this.lastPollAt)/1000)); }, 1000);
       window.addEventListener('keydown', e=>this.onKey(e));
+    },
+    setTab(t){
+      this.tab = t;
+      const h = t==='topology' ? '#connections' : '';
+      history.replaceState(null, '', h || location.pathname + location.search);
     },
 
     /* ---- helpers ---- */
