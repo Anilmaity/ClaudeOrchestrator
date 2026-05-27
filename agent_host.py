@@ -209,38 +209,60 @@ def spawn_conpty(name, cmd, cwd, cols, rows, status_path=None, role_file=""):
     return host
 
 
+def _log_crash(name: str, where: str) -> None:
+    """Append the current exception traceback to the host's crash log, so a host
+    that dies is never silent again. Best-effort: never raises."""
+    import traceback
+    try:
+        d = common.STATE_DIR / "win" / name
+        d.mkdir(parents=True, exist_ok=True)
+        with (d / "crash.log").open("a", encoding="utf-8") as f:
+            f.write(f"\n--- {where} {common._now()} ---\n")
+            f.write(traceback.format_exc())
+    except Exception:
+        pass
+
+
 def _pump(host):
     """Read pty output forever: echo to this console + feed the pyte screen +
-    auto-accept trust/bypass dialogs + flip `ready` when the footer appears."""
+    auto-accept trust/bypass dialogs + flip `ready` when the footer appears.
+
+    Every iteration is guarded: a transient screen/IO error must never escape
+    and end the loop, because that returns from main() and lets the ConPTY close
+    (which kills claude). On error we log and keep pumping."""
     child = host.child
     accepted_bypass = False
     accepted_trust = False
     while child.isalive():
-        data = child.read(65536)
-        if data:
-            try:
-                sys.stdout.write(data)
-                sys.stdout.flush()
-            except Exception:
-                pass
-            host.screen.feed(data.encode("utf-8", "replace"))
-            low = host.screen.text().lower()
-            if not accepted_bypass and common.BYPASS_MARKER in low:
-                host.write("2")
-                time.sleep(0.3)
-                host.write("\r")
-                accepted_bypass = True
-                time.sleep(1.0)
-                continue
-            if not accepted_trust and any(m in low for m in common.TRUST_MARKERS):
-                host.write("\r")
-                time.sleep(0.8)
-                accepted_trust = True
-                continue
-            host.mark_ready_if_seen()
-            host._write_status()
-        else:
-            time.sleep(0.05)
+        try:
+            data = child.read(65536)
+            if data:
+                try:
+                    sys.stdout.write(data)
+                    sys.stdout.flush()
+                except Exception:
+                    pass
+                host.screen.feed(data.encode("utf-8", "replace"))
+                low = host.screen.text().lower()
+                if not accepted_bypass and common.BYPASS_MARKER in low:
+                    host.write("2")
+                    time.sleep(0.3)
+                    host.write("\r")
+                    accepted_bypass = True
+                    time.sleep(1.0)
+                    continue
+                if not accepted_trust and any(m in low for m in common.TRUST_MARKERS):
+                    host.write("\r")
+                    time.sleep(0.8)
+                    accepted_trust = True
+                    continue
+                host.mark_ready_if_seen()
+                host._write_status()
+            else:
+                time.sleep(0.05)
+        except Exception:
+            _log_crash(host.name, "pump-iteration")
+            time.sleep(0.1)
     host._write_status()
 
 
@@ -321,8 +343,12 @@ def main(argv=None):
     # (the orch control socket still drives it too, for peek/send/dispatch).
     threading.Thread(target=_forward_console_input, args=(host,),
                      daemon=True).start()
-    host.start_pump(background=False)     # blocks until claude exits / STOP
-    host.shutdown()
+    try:
+        host.start_pump(background=False)  # blocks until claude exits / STOP
+    except Exception:
+        _log_crash(name, "pump-fatal")
+    finally:
+        host.shutdown()
     return 0
 
 
