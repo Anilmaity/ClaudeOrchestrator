@@ -39,6 +39,7 @@ import orch  # tmux primitives + shared constants
 HERE = Path(__file__).resolve().parent
 CONFIG = HERE / "fleet.json"
 DASHBOARD = HERE / "dashboard.html"
+VENDOR_ALPINE = HERE / "vendor" / "alpine.min.js"   # served at /vendor/alpine.min.js
 
 STATE_DIR = orch.STATE_DIR
 TASKS_FILE = STATE_DIR / "fleet_tasks.json"
@@ -507,6 +508,16 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            elif u.path == "/vendor/alpine.min.js":
+                if not VENDOR_ALPINE.exists():
+                    return self._json({"error": "alpine.min.js missing"}, 404)
+                body = VENDOR_ALPINE.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/javascript; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "max-age=86400")
                 self.end_headers()
                 self.wfile.write(body)
             elif u.path == "/api/state":
