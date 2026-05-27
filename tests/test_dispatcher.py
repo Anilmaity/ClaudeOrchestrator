@@ -41,16 +41,20 @@ def _running_task():
         "id": "t-1", "agent": "a", "description": "x", "status": "running",
         "created_at": fleet._now(), "started_at": fleet._now(),
         "finished_at": None, "saw_busy": False, "idle_seen": 0,
-        "tries": 1, "log": "",
+        "tries": 1, "needs_attention": False, "log": "",
     }
 
 
-def _setup(tmp_path, monkeypatch, captures, alive=True):
+def _setup(tmp_path, monkeypatch, captures, alive=True, attention=None):
     fb = FakeBackend(captures, alive=alive)
     monkeypatch.setattr(orch, "_backend", fb)
     monkeypatch.setattr(fleet, "STATE_DIR", tmp_path)
     monkeypatch.setattr(fleet, "TASKS_FILE", tmp_path / "tasks.json")
     monkeypatch.setattr(fleet, "TASK_LOGS", tmp_path / "logs")
+    # agent_attention does its own terminal capture; stub it so it doesn't
+    # consume the scripted activity captures. Tests exercising the attention
+    # path pass their own callable.
+    monkeypatch.setattr(fleet, "agent_attention", attention or (lambda name: False))
     agents = [{"name": "a", "role": "", "project_dir": str(tmp_path)}]
     monkeypatch.setattr(fleet, "load_config", lambda *a, **k: agents)
     monkeypatch.setattr(fleet, "ensure_agent", lambda ag: "")
@@ -115,3 +119,53 @@ def test_running_task_agent_not_respawned(tmp_path, monkeypatch):
     monkeypatch.setattr(fleet, "ensure_agent", lambda ag: calls.append(ag["name"]))
     disp.tick()
     assert "a" not in calls
+
+
+def test_attention_holds_task_then_completes(tmp_path, monkeypatch):
+    # Agent goes busy, then reads idle while blocked on a question for
+    # >= CONFIRM_IDLE ticks -> stays running with needs_attention=True (NOT
+    # done). When attention clears, CONFIRM_IDLE clean idles -> done, flag clear.
+    attn = {"on": True}
+    disp = _setup(
+        tmp_path, monkeypatch,
+        ["esc to interrupt"] + ["idle prompt"] * 12,
+        attention=lambda name: attn["on"],
+    )
+    disp.tick()                                  # busy -> saw_busy
+    for _ in range(fleet.CONFIRM_IDLE + 1):
+        disp.tick()                              # idle but blocked on attention
+    t = fleet._load_tasks()["tasks"][0]
+    assert t["status"] == "running"
+    assert t["needs_attention"] is True
+
+    attn["on"] = False                           # human answered; agent resumes
+    for _ in range(fleet.CONFIRM_IDLE):
+        disp.tick()
+    t = fleet._load_tasks()["tasks"][0]
+    assert t["status"] == "done"
+    assert t["needs_attention"] is False
+
+
+def test_watchdog_fails_overrun_task_and_frees_agent(tmp_path, monkeypatch):
+    # A running task older than TASK_TIMEOUT_SECS, the agent still showing the
+    # busy marker, is failed and the agent freed -> a pending task for the same
+    # agent then dispatches to running once the agent is ready.
+    monkeypatch.setattr(fleet, "TASK_TIMEOUT_SECS", 1)
+    disp = _setup(tmp_path, monkeypatch, ["esc to interrupt", "shift+tab to cycle"])
+    d = fleet._load_tasks()
+    d["tasks"][0]["started_at"] = "2000-01-01T00:00:00Z"   # long overrun
+    d["tasks"].append({
+        "id": "t-2", "agent": "a", "description": "next", "status": "pending",
+        "created_at": fleet._now(), "started_at": None, "finished_at": None,
+        "saw_busy": False, "needs_attention": False, "log": "",
+    })
+    fleet._save_tasks(d)
+
+    disp.tick()                                  # watchdog fires -> t-1 failed
+    tasks = {t["id"]: t for t in fleet._load_tasks()["tasks"]}
+    assert tasks["t-1"]["status"] == "failed"
+    assert "exceeded max runtime" in tasks["t-1"]["log"]
+
+    disp.tick()                                  # freed agent (now ready) -> t-2
+    tasks = {t["id"]: t for t in fleet._load_tasks()["tasks"]}
+    assert tasks["t-2"]["status"] == "running"

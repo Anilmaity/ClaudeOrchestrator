@@ -51,6 +51,14 @@ DELIVER_GRACE = 10  # if an agent never goes busy this long after dispatch, retr
 MAX_TRIES = 3       # give up delivering a task after this many attempts
 CONFIRM_IDLE = 2    # consecutive idle polls required before a task is called done
 CONFIRM_GONE = 3    # consecutive 'window gone' polls before a running task fails
+# Per-task runtime watchdog: a wedged agent that keeps showing the busy marker
+# would otherwise keep its task 'running' forever and head-of-line-block its
+# queue. Fail a task once it has run longer than this — generous default so
+# normal long work is never killed; override with env FLEET_TASK_TIMEOUT (secs).
+try:
+    TASK_TIMEOUT_SECS = int(os.environ.get("FLEET_TASK_TIMEOUT", "1800"))
+except ValueError:
+    TASK_TIMEOUT_SECS = 1800
 
 _LOCK = threading.Lock()
 AGENTS: list[dict] = []     # active fleet, populated by `up`
@@ -276,7 +284,8 @@ def add_task(agent: str, description: str) -> str:
         d["tasks"].append({
             "id": tid, "agent": agent, "description": description.strip(),
             "status": "pending", "created_at": _now(),
-            "started_at": None, "finished_at": None, "saw_busy": False, "log": "",
+            "started_at": None, "finished_at": None, "saw_busy": False,
+            "needs_attention": False, "log": "",
         })
         _save_tasks(d)
         return tid
@@ -351,6 +360,22 @@ class Dispatcher(threading.Thread):
             # 2) advance running tasks
             for t in (x for x in d["tasks"] if x["status"] == "running"):
                 name = t["agent"]
+
+                # Per-task runtime watchdog: fail a task that has run past
+                # TASK_TIMEOUT_SECS (a wedged agent stuck showing the busy marker,
+                # or one parked on a question) so it stops head-of-line-blocking
+                # its agent's queue; freeing the agent lets the next pending task
+                # dispatch on this same tick. Guard a missing started_at so a task
+                # mid-dispatch is never failed before it has a start time.
+                started = t.get("started_at")
+                if started is not None and _age(started) > TASK_TIMEOUT_SECS:
+                    why = " (was waiting on your attention)" if t.get("needs_attention") else ""
+                    t.update(status="failed", finished_at=_now(),
+                             log=(t.get("log") or "")
+                                 + f"\nexceeded max runtime ({TASK_TIMEOUT_SECS}s){why}")
+                    changed = True
+                    continue
+
                 if not orch._window_exists(name):
                     # Require sustained absence: a busy agent under load can miss a
                     # PING; one missed read must not fail an in-flight task.
@@ -363,13 +388,28 @@ class Dispatcher(threading.Thread):
                 t["gone_seen"] = 0
                 act = agent_activity(name)
                 if act == "busy":
-                    if not t.get("saw_busy") or t.get("idle_seen"):
+                    # Working again: clear any prior idle / attention bookkeeping.
+                    if not t.get("saw_busy") or t.get("idle_seen") or t.get("needs_attention"):
                         t["saw_busy"] = True
                         t["idle_seen"] = 0
+                        t["needs_attention"] = False
                         changed = True
                     continue
                 # agent looks idle:
                 if t.get("saw_busy"):
+                    # An agent paused on a question (trust/permission prompt or
+                    # asking the human) also reads idle. Don't let that drift to
+                    # "done" with a truncated log: flag it as needing attention
+                    # and hold the task open (idle_seen reset) until it resumes.
+                    if agent_attention(name):
+                        if not t.get("needs_attention") or t.get("idle_seen"):
+                            t["needs_attention"] = True
+                            t["idle_seen"] = 0
+                            changed = True
+                        continue
+                    if t.get("needs_attention"):   # resumed -> clear the flag
+                        t["needs_attention"] = False
+                        changed = True
                     # Require CONFIRM_IDLE consecutive idle reads before declaring
                     # done — a single dropped capture reads as idle and would end
                     # the task early with a truncated log.
@@ -404,7 +444,7 @@ class Dispatcher(threading.Thread):
                     continue
                 orch._send_text(name, _kickoff(t))
                 t.update(status="running", started_at=_now(), saw_busy=False,
-                         idle_seen=0, gone_seen=0, tries=1)
+                         idle_seen=0, gone_seen=0, tries=1, needs_attention=False)
                 busy.add(name)
                 changed = True
 
