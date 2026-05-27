@@ -318,6 +318,64 @@
   .topo-legend{margin-top:var(--sp-4);color:var(--text-dim);font-size:var(--fs-400);line-height:1.6;
     border-top:1px solid var(--border);padding-top:var(--sp-3)}
   .topo-legend b{color:var(--text);font-weight:600}
+  /* live task-flow lanes between the topology rows */
+  .flow{display:flex;flex-direction:column;align-items:center;gap:4px;margin:2px 0}
+  .flowtrack{position:relative;width:3px;height:34px;background:var(--border);border-radius:3px;overflow:hidden}
+  .flowtrack.on{background:rgba(122,162,255,.20)}
+  .flowtrack.on::before,.flowtrack.on::after{content:"";position:absolute;left:0;right:0;top:-12px;
+    height:11px;background:var(--accent);border-radius:3px;animation:flowdown 1.3s linear infinite}
+  .flowtrack.on::after{animation-delay:.65s}
+  @keyframes flowdown{0%{top:-12px;opacity:0}15%{opacity:1}85%{opacity:1}100%{top:34px;opacity:0}}
+  .flowcount{font-size:var(--fs-200);font-family:var(--mono);color:var(--text-faint)}
+  .flowcount.on{color:var(--accent)}
+  .tnode.running{border-left-color:var(--st-busy);box-shadow:0 0 0 1px var(--st-busy) inset}
+  .tnode.running .tcur{animation:pulse 1.4s ease-in-out infinite}
+
+  /* ---- Live stats bar ---- */
+  .statbar{display:grid;gap:var(--sp-3);margin:0 0 var(--sp-4);
+    grid-template-columns:repeat(auto-fit,minmax(124px,1fr))}
+  .stat{position:relative;background:var(--surface-1);border:1px solid var(--border);
+    border-radius:var(--r-md);padding:var(--sp-3) var(--sp-4);box-shadow:var(--sh-1);
+    display:flex;flex-direction:column;gap:3px;overflow:hidden}
+  .stat::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--st-off)}
+  .stat .k{display:flex;align-items:center;gap:6px;font-size:var(--fs-200);text-transform:uppercase;
+    letter-spacing:.06em;color:var(--text-dim)}
+  .stat .v{font-size:24px;font-weight:600;line-height:1.05;font-variant-numeric:tabular-nums}
+  .stat .sub{font-size:var(--fs-200);color:var(--text-faint)}
+  .stat[data-tone="busy"]::before{background:var(--st-busy)}  .stat[data-tone="busy"] .v{color:var(--st-busy)}
+  .stat[data-tone="ok"]::before{background:var(--st-ok)}      .stat[data-tone="ok"] .v{color:var(--st-ok)}
+  .stat[data-tone="wait"]::before{background:var(--st-wait)}  .stat[data-tone="wait"] .v{color:var(--st-wait)}
+  .stat[data-tone="accent"]::before{background:var(--accent)} .stat[data-tone="accent"] .v{color:var(--accent)}
+  .stat[data-tone="alert"]{border-color:var(--st-alert)}
+  .stat[data-tone="alert"]::before{background:var(--st-alert)}
+  .stat[data-tone="alert"] .v{color:var(--st-alert)}
+  .stat[data-tone="alert"] .k .d{width:7px;height:7px;border-radius:50%;background:var(--st-alert);
+    animation:pulse 1.2s ease-in-out infinite}
+
+  /* ---- Activity feed (chat history of tasks given) ---- */
+  .feed-controls{display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-2);margin:0 0 var(--sp-4)}
+  .feed-controls select{width:auto;min-width:130px}
+  .feed-controls .search{flex:1;min-width:160px}
+  .feed{display:flex;flex-direction:column;gap:var(--sp-4)}
+  .daydiv{display:flex;align-items:center;gap:var(--sp-3);color:var(--text-faint);
+    font-size:var(--fs-200);text-transform:uppercase;letter-spacing:.06em;margin:var(--sp-1) 0}
+  .daydiv::before,.daydiv::after{content:"";flex:1;height:1px;background:var(--border)}
+  .daygroup{display:flex;flex-direction:column;gap:var(--sp-3)}
+  .msg{display:flex;gap:var(--sp-3);align-items:flex-start}
+  .msg .ava{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;
+    font-size:var(--fs-400);font-weight:600;background:var(--accent-soft);color:var(--accent);
+    border:1px solid var(--border);text-transform:uppercase}
+  .msg .body{flex:1;min-width:0}
+  .msg .meta{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px;
+    font-size:var(--fs-200);color:var(--text-dim)}
+  .msg .meta .who{color:var(--text);font-weight:600;font-size:var(--fs-300)}
+  .msg .meta .kind{font-family:var(--mono);color:var(--text-faint)}
+  .msg .meta .at{margin-left:auto;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .msg .bubble{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);
+    border-top-left-radius:var(--r-sm);padding:9px 12px;font-size:var(--fs-400);
+    white-space:pre-wrap;word-break:break-word;color:var(--text)}
+  .msg.kind-msg .bubble{background:var(--accent-soft);border-color:var(--border-strong)}
+  .msg .bubble .acts{margin-top:8px;display:flex;gap:6px}
 
   /* ---- Footer ---- */
   .foot{margin-top:var(--sp-5);text-align:center;color:var(--text-faint);font-size:var(--fs-200)}
@@ -340,6 +398,7 @@
 
   <div class="tabs" role="tablist">
     <button class="tab" type="button" role="tab" :class="{active:tab==='dashboard'}" :aria-selected="tab==='dashboard'" @click="setTab('dashboard')">⊞ Dashboard</button>
+    <button class="tab" type="button" role="tab" :class="{active:tab==='activity'}" :aria-selected="tab==='activity'" @click="setTab('activity')">⏱ Activity</button>
     <button class="tab" type="button" role="tab" :class="{active:tab==='topology'}" :aria-selected="tab==='topology'" @click="setTab('topology')">⛓ Connections</button>
   </div>
 
@@ -349,6 +408,44 @@
     <span x-show="attnNames.length"><strong>Needs you:</strong> <span x-text="attnNames.join(', ')"></span></span>
     <span class="chip" x-show="failedTasks.length">✕ <span x-text="failedTasks.length"></span> failed task<span x-text="failedTasks.length>1?'s':''"></span></span>
     <button class="mini jump" type="button" x-show="attnNames.length" @click="jumpToAttn()">Jump to first ▸</button>
+  </div>
+
+  <div class="statbar" role="group" aria-label="live fleet stats">
+    <div class="stat" data-tone="accent">
+      <span class="k">Agents online</span>
+      <span class="v" x-text="stats.online + ' / ' + stats.total"></span>
+      <span class="sub" x-text="stats.idle + ' idle · ' + stats.offline + ' offline'"></span>
+    </div>
+    <div class="stat" :data-tone="stats.running ? 'busy' : 'off'">
+      <span class="k">Running</span>
+      <span class="v" x-text="stats.running"></span>
+      <span class="sub">tasks in progress</span>
+    </div>
+    <div class="stat" :data-tone="stats.pending ? 'wait' : 'off'">
+      <span class="k">Queued</span>
+      <span class="v" x-text="stats.pending"></span>
+      <span class="sub">waiting to dispatch</span>
+    </div>
+    <div class="stat" :data-tone="stats.attn ? 'alert' : 'off'">
+      <span class="k"><span class="d" x-show="stats.attn" aria-hidden="true"></span>Needs you</span>
+      <span class="v" x-text="stats.attn"></span>
+      <span class="sub" x-text="stats.attn ? 'blocked on a question' : 'all clear'"></span>
+    </div>
+    <div class="stat" data-tone="ok">
+      <span class="k">Done</span>
+      <span class="v" x-text="stats.done"></span>
+      <span class="sub" x-text="stats.rate===null ? 'no finished tasks' : (stats.rate + '% success')"></span>
+    </div>
+    <div class="stat" :data-tone="stats.failed ? 'alert' : 'off'">
+      <span class="k">Failed</span>
+      <span class="v" x-text="stats.failed"></span>
+      <span class="sub">errored or timed out</span>
+    </div>
+    <div class="stat">
+      <span class="k">Avg run</span>
+      <span class="v" x-text="stats.avg===null ? '—' : dur0(stats.avg)"></span>
+      <span class="sub">per completed task</span>
+    </div>
   </div>
 
   <div class="layout">
@@ -489,6 +586,59 @@
   </div>
   </div><!-- /dashboard tab -->
 
+  <div x-show="tab==='activity'" x-cloak>
+    <section class="card">
+      <div class="section-head">
+        <h2>Activity — chat history of tasks given</h2>
+        <button class="mini ghost" type="button" x-show="localMsgs.length" @click="clearMsgs()"
+                title="Remove the steering messages this browser has logged">Clear messages</button>
+      </div>
+      <div class="feed-controls">
+        <label for="feedAgent" style="margin:0">Agent</label>
+        <select id="feedAgent" x-model="feedAgent" aria-label="filter by agent">
+          <option value="">All agents</option>
+          <template x-for="a in agents" :key="a.name"><option :value="a.name" x-text="a.name"></option></template>
+        </select>
+        <input class="search" type="search" x-model="feedQuery" aria-label="search activity"
+               placeholder="Search tasks & messages…">
+      </div>
+      <template x-if="!feed.length">
+        <div class="empty" x-text="(feedAgent||feedQuery) ? 'Nothing matches this filter.' : 'No tasks given yet — queue one from the Dashboard tab.'"></div>
+      </template>
+      <div class="feed">
+        <template x-for="g in feed" :key="g.day">
+          <div class="daygroup">
+            <div class="daydiv"><span x-text="g.day"></span></div>
+            <template x-for="m in g.items" :key="m.key">
+              <div class="msg" :class="'kind-'+m.kind">
+                <div class="ava" :style="'background:'+agentTint(m.agent)+';color:'+agentColor(m.agent)+';border-color:'+agentColor(m.agent)"
+                     :title="m.agent" x-text="(m.agent||'?').slice(0,2)"></div>
+                <div class="body">
+                  <div class="meta">
+                    <span class="who" x-text="'You → ' + m.agent"></span>
+                    <span class="kind" x-show="m.kind==='task'" x-text="m.id"></span>
+                    <span class="pill" x-show="m.kind==='task'" :data-s="m.status">
+                      <span :class="m.status==='running' ? 'spin' : ''" aria-hidden="true" x-text="glyph(m.status)"></span><span x-text="m.status"></span>
+                    </span>
+                    <span class="kind" x-show="m.kind==='msg'">message</span>
+                    <span class="at" :title="absAt(m.at)" x-text="(now, relAt(m.at))"></span>
+                  </div>
+                  <div class="bubble">
+                    <span x-text="m.text"></span>
+                    <div class="acts" x-show="m.kind==='task'">
+                      <span class="muted" x-show="m.duration" x-text="'⏱ ' + m.duration"></span>
+                      <button class="mini" @click="taskLog(m.id)">log</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </div>
+        </template>
+      </div>
+    </section>
+  </div><!-- /activity tab -->
+
   <div x-show="tab==='topology'" x-cloak>
     <section class="card">
       <div class="section-head"><h2>How the fleet is connected</h2></div>
@@ -499,7 +649,10 @@
             <div class="tdesc">Queue tasks, message agents, and watch live state from here.</div>
           </div>
         </div>
-        <div class="tarrow">▼ &nbsp;queue task · message&nbsp; ▼</div>
+        <div class="flow" :title="pendingCount + ' task(s) queued, waiting to be delivered'">
+          <div class="flowtrack" :class="{on: pendingCount>0}"></div>
+          <span class="flowcount" :class="{on: pendingCount>0}" x-text="pendingCount>0 ? (pendingCount + ' queued ▾') : 'queue · message'"></span>
+        </div>
         <div class="topo-row">
           <div class="tnode disp">
             <div class="tname">Dispatcher</div>
@@ -513,11 +666,14 @@
             <div class="tdesc">A worker with a coordinator role: breaks goals into tasks, queues them for the workers, and unsticks stuck ones (peek / message / restart).</div>
           </div>
         </div>
-        <div class="tarrow">▼ &nbsp;deliver task · oversee&nbsp; ▼</div>
+        <div class="flow" :title="runningCount + ' task(s) running on agents'">
+          <span class="flowcount" :class="{on: runningCount>0}" x-text="runningCount>0 ? (runningCount + ' running ▾') : 'deliver · oversee'"></span>
+          <div class="flowtrack" :class="{on: runningCount>0}"></div>
+        </div>
         <div class="topo-row">
           <template x-if="!workers.length"><div class="empty">No worker agents.</div></template>
           <template x-for="w in workers" :key="w.name">
-            <div class="tnode worker" :data-s="w.attention?'attn':w.activity">
+            <div class="tnode worker" :class="{running: w.current_task}" :data-s="w.attention?'attn':w.activity">
               <div class="tname">
                 <span x-text="w.name"></span>
                 <span class="badge" :data-s="w.attention?'attn':w.activity"><span class="d"></span><span x-text="w.attention?'needs you':w.activity"></span></span>
@@ -584,6 +740,8 @@ function fleet(){
     connected: null,                // null=connecting, true, false
     booted: false,
     tab: 'dashboard',
+    feedAgent: '', feedQuery: '',    // Activity-tab filters
+    localMsgs: [],                   // steering messages sent from this browser (not server-persisted)
     lastPollAt: Date.now(), pollSecs: 0, now: Date.now(),
     dragging: false,
     toasts: [], _toastId: 0,
@@ -594,6 +752,8 @@ function fleet(){
     init(){
       const h = location.hash.replace('#','');
       if(h==='connections' || h==='topology') this.tab = 'topology';
+      else if(h==='activity') this.tab = 'activity';
+      this.loadMsgs();
       this.refresh().then(()=>this.refreshDocs());
       setInterval(()=>this.refresh(), 2500);
       setInterval(()=>{ this.now = Date.now();
@@ -602,7 +762,7 @@ function fleet(){
     },
     setTab(t){
       this.tab = t;
-      const h = t==='topology' ? '#connections' : '';
+      const h = t==='topology' ? '#connections' : (t==='activity' ? '#activity' : '');
       history.replaceState(null, '', h || location.pathname + location.search);
     },
 
@@ -624,6 +784,42 @@ function fleet(){
       if(t.finished_at && (t.started_at||t.created_at)) return this.dur(t.started_at||t.created_at, t.finished_at);
       return '—';
     },
+    // duration from a raw seconds count (used by the avg-run stat)
+    dur0(s){
+      s = Math.max(0, Math.round(s));
+      if(s<60) return s+'s';
+      const m = Math.floor(s/60); if(m<60) return m+'m '+(s%60)+'s';
+      const h = Math.floor(m/60); return h+'h '+(m%60)+'m';
+    },
+    relAt(iso){
+      if(!iso) return '';
+      const s = Math.max(0, Math.round((this.now - Date.parse(iso))/1000));
+      if(s<45) return 'just now';
+      if(s<90) return '1 min ago';
+      const m = Math.round(s/60); if(m<60) return m+' min ago';
+      const h = Math.round(m/60); if(h<24) return h+(h>1?' hrs ago':' hr ago');
+      const d = Math.round(h/24); return d+(d>1?' days ago':' day ago');
+    },
+    absAt(iso){ return iso ? new Date(iso).toLocaleString() : ''; },
+    dayLabel(iso){
+      const d = new Date(iso), t = new Date();
+      const same = (a,b)=> a.toDateString()===b.toDateString();
+      if(same(d,t)) return 'Today';
+      const y = new Date(t); y.setDate(t.getDate()-1);
+      if(same(d,y)) return 'Yesterday';
+      return d.toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric'});
+    },
+    // stable per-agent accent so each agent reads consistently in the feed
+    agentColor(name){
+      const hues=[210,150,30,280,340,190,90,260];
+      let n=0; for(const c of String(name||'')) n=(n*31 + c.charCodeAt(0))>>>0;
+      return `hsl(${hues[n%hues.length]} 70% 70%)`;
+    },
+    agentTint(name){
+      const hues=[210,150,30,280,340,190,90,260];
+      let n=0; for(const c of String(name||'')) n=(n*31 + c.charCodeAt(0))>>>0;
+      return `hsl(${hues[n%hues.length]} 60% 70% / .14)`;
+    },
 
     /* ---- derived views ---- */
     get sortedAgents(){
@@ -636,6 +832,54 @@ function fleet(){
     isManager(a){ return (a.role||'').toLowerCase().includes('manager') || a.name==='orch'; },
     get manager(){ return this.agents.find(a=>this.isManager(a)) || null; },
     get workers(){ return this.agents.filter(a=>!this.isManager(a)); },
+    get pendingCount(){ return this.tasks.filter(t=>t.status==='pending').length; },
+    get runningCount(){ return this.tasks.filter(t=>t.status==='running').length; },
+    // live aggregate stats for the stats bar (derived from /api/state each poll)
+    get stats(){
+      const a = this.agents;
+      const by = s => a.filter(x=>x.activity===s).length;
+      const c = this.tasks.reduce((m,t)=>(m[t.status]=(m[t.status]||0)+1,m),{});
+      const done = c.done||0, failed = c.failed||0, fin = done+failed;
+      const durs = this.tasks
+        .filter(t=>t.status==='done' && t.finished_at && (t.started_at||t.created_at))
+        .map(t=>(Date.parse(t.finished_at)-Date.parse(t.started_at||t.created_at))/1000)
+        .filter(s=>s>=0);
+      return {
+        total: a.length,
+        online: a.filter(x=>x.activity!=='offline').length,
+        idle: by('idle'), offline: by('offline'),
+        running: c.running||0, pending: c.pending||0,
+        done, failed, attn: this.attnNames.length,
+        rate: fin ? Math.round(done/fin*100) : null,
+        avg: durs.length ? durs.reduce((s,x)=>s+x,0)/durs.length : null,
+      };
+    },
+    // chat-style history of tasks given (server-persisted) + steering messages
+    // sent from this browser, grouped by day, newest first.
+    get feed(){
+      const items = [];
+      for(const t of this.tasks){
+        items.push({key:'t'+t.id, kind:'task', agent:t.agent, id:t.id,
+          text:t.description, status:t.status, at:t.created_at,
+          duration:(t.finished_at && (t.started_at||t.created_at))
+            ? this.dur(t.started_at||t.created_at, t.finished_at) : ''});
+      }
+      for(const m of this.localMsgs){
+        items.push({key:'m'+m.at+'-'+m.agent, kind:'msg', agent:m.agent, text:m.text, at:m.at});
+      }
+      let f = items;
+      if(this.feedAgent) f = f.filter(i=>i.agent===this.feedAgent);
+      const q = this.feedQuery.trim().toLowerCase();
+      if(q) f = f.filter(i=>((i.text||'')+' '+(i.agent||'')+' '+(i.id||'')).toLowerCase().includes(q));
+      f.sort((x,y)=>(Date.parse(y.at)||0)-(Date.parse(x.at)||0));
+      const groups = []; let cur = null;
+      for(const it of f){
+        const day = this.dayLabel(it.at);
+        if(!cur || cur.day!==day){ cur = {day, items:[]}; groups.push(cur); }
+        cur.items.push(it);
+      }
+      return groups;
+    },
     get summaryHtml(){
       const c = this.tasks.reduce((m,t)=>(m[t.status]=(m[t.status]||0)+1,m),{});
       const attn = this.attnNames.length;
@@ -711,8 +955,16 @@ function fleet(){
       const r = await this.api('/api/agent/send',{method:'POST',headers:{'Content-Type':'application/json'},
         body: JSON.stringify({name, message})});
       if(r.error){ this.toast(r.error,'err'); return; }
+      this.recordMsg(name, message);
       this.reply[name] = ''; this.toast('Sent to '+name); this.refresh();
     },
+
+    /* ---- local message history (steering messages aren't server-persisted) ---- */
+    loadMsgs(){ try{ this.localMsgs = JSON.parse(localStorage.getItem('fleetMsgs')||'[]'); }catch(e){ this.localMsgs = []; } },
+    saveMsgs(){ try{ localStorage.setItem('fleetMsgs', JSON.stringify(this.localMsgs.slice(-200))); }catch(e){} },
+    recordMsg(agent, text){ this.localMsgs.push({agent, text, at:new Date().toISOString()}); this.saveMsgs(); },
+    clearMsgs(){ if(!confirm('Clear logged messages from this browser? (Tasks are unaffected.)')) return;
+      this.localMsgs = []; this.saveMsgs(); this.toast('Cleared local messages'); },
     async cancel(id){
       await this.api('/api/task/cancel',{method:'POST',headers:{'Content-Type':'application/json'},body: JSON.stringify({id})});
       this.toast('Canceled '+id); this.refresh();
