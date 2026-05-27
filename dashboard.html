@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Claude Fleet</title>
+<script defer src="https://unpkg.com/alpinejs@3.14.9/dist/cdn.min.js"></script>
 <style>
   :root{
     /* ---- Surfaces (low -> high elevation) ---- */
@@ -59,6 +60,7 @@
   }
 
   *{box-sizing:border-box}
+  [x-cloak]{display:none!important}
   body{margin:0;font:var(--fs-500)/1.5 var(--font);background:var(--bg);color:var(--text);
        -webkit-font-smoothing:antialiased}
   :focus-visible{outline:none;box-shadow:0 0 0 3px var(--ring);border-radius:var(--r-sm)}
@@ -296,30 +298,106 @@
   .foot b{color:var(--text-dim);font-family:var(--mono);font-weight:400}
 </style>
 </head>
-<body>
+<body x-data="fleet()" x-cloak>
 <header class="header">
-  <span class="livedot loading" id="livedot" title="Connecting…" aria-label="connection status"></span>
+  <span class="livedot" :class="{loading: connected===null, bad: connected===false}"
+        :title="connected===false ? 'Connection lost — retrying' : (connected ? 'Connected' : 'Connecting…')"
+        aria-label="connection status"></span>
   <h1>Claude Fleet</h1>
-  <span class="sub" id="summary" aria-live="polite">loading…</span>
-  <button class="poll" id="poll" type="button" title="Seconds since last update — click to refresh now" aria-label="refresh now">⟳ <span id="pollTime">0:00</span></button>
+  <span class="sub" x-html="summaryHtml" aria-live="polite"></span>
+  <button class="poll" type="button" @click="refresh()"
+          title="Seconds since last update — click to refresh now" aria-label="refresh now">⟳ <span x-text="mmss(pollSecs)">0:00</span></button>
 </header>
 
 <div class="shell">
-  <div class="conn-banner" id="connBanner" hidden role="status">Connection lost — retrying…</div>
-  <div id="attention" class="attention" hidden aria-live="assertive"></div>
+  <div class="conn-banner" x-show="connected===false" role="status">Connection lost — retrying…</div>
+
+  <div class="attention" x-show="attnNames.length || failedTasks.length" aria-live="assertive">
+    <span aria-hidden="true">⚠</span>
+    <span x-show="attnNames.length"><strong>Needs you:</strong> <span x-text="attnNames.join(', ')"></span></span>
+    <span class="chip" x-show="failedTasks.length">✕ <span x-text="failedTasks.length"></span> failed task<span x-text="failedTasks.length>1?'s':''"></span></span>
+    <button class="mini jump" type="button" x-show="attnNames.length" @click="jumpToAttn()">Jump to first ▸</button>
+  </div>
 
   <div class="layout">
     <div class="primary">
       <section class="card">
         <div class="section-head"><h2>Agents</h2></div>
-        <div id="agents" class="agents-grid"></div>
+        <div class="agents-grid">
+          <template x-if="booted && !agents.length">
+            <div class="empty">No agents configured. Edit fleet.json and run ./fleet up.</div>
+          </template>
+          <template x-if="!booted">
+            <template x-for="i in 3" :key="i">
+              <div class="agent">
+                <div class="skel" style="height:14px;width:45%"></div>
+                <div class="skel" style="height:10px;width:65%"></div>
+                <div class="skel" style="height:10px;width:85%"></div>
+              </div>
+            </template>
+          </template>
+          <template x-for="a in sortedAgents" :key="a.name">
+            <div class="agent" :class="{attn:a.attention, offline:a.activity==='offline'}"
+                 :data-s="a.attention ? 'attn' : a.activity" :data-name="a.name">
+              <div class="top">
+                <span class="name" x-text="a.name"></span>
+                <span class="badge" :data-s="a.attention ? 'attn' : a.activity"
+                      :aria-label="'status: ' + (a.attention ? 'needs you' : a.activity)">
+                  <span class="d"></span><span x-text="a.attention ? 'needs you' : a.activity"></span>
+                </span>
+              </div>
+              <div class="role">
+                <span x-show="a.role" x-text="a.role"></span>
+                <span x-show="!a.role" class="muted">no role set</span>
+              </div>
+              <div class="path" :title="a.project_dir" x-text="a.project_dir"></div>
+              <div class="cur" x-show="a.current_task">
+                <span aria-hidden="true">▶</span>
+                <span class="desc" :title="a.current_desc||''" x-text="(a.current_task||'') + ' · ' + (a.current_desc||'')"></span>
+                <span class="elapsed" x-show="a.current_started" x-text="(now, '· ' + durSince(a.current_started))"></span>
+              </div>
+              <div class="cur-idle" x-show="!a.current_task && a.activity==='idle'">idle · waiting for work</div>
+              <div class="reply">
+                <input :aria-label="'message ' + a.name" :placeholder="'message ' + a.name + '…'"
+                       x-model="reply[a.name]" @keydown.enter="sendMsg(a.name)">
+                <button class="mini" @click="sendMsg(a.name)"
+                        :disabled="a.activity==='offline'" :title="a.activity==='offline' ? 'agent is offline' : ''">Send</button>
+              </div>
+              <div class="actions">
+                <button class="mini ghost" @click="liveLog(a.name)">⧉ live log</button>
+                <button class="mini ghost danger" @click="restart(a.name)">⟲ restart</button>
+              </div>
+            </div>
+          </template>
+        </div>
       </section>
 
       <section class="card">
         <div class="section-head"><h2>Tasks</h2></div>
         <table class="tasks">
           <thead><tr><th>ID</th><th>Agent</th><th>Status</th><th>Time</th><th>Task</th><th></th></tr></thead>
-          <tbody id="tasks"></tbody>
+          <tbody>
+            <template x-if="!tasks.length">
+              <tr><td colspan="6"><div class="empty">No tasks yet — queue one from “New task”.</div></td></tr>
+            </template>
+            <template x-for="t in tasks" :key="t.id">
+              <tr :data-s="t.status">
+                <td class="id" data-label="ID" x-text="t.id"></td>
+                <td data-label="Agent" x-text="t.agent"></td>
+                <td data-label="Status">
+                  <span class="pill" :data-s="t.status" :aria-label="'status: ' + t.status">
+                    <span :class="t.status==='running' ? 'spin' : ''" aria-hidden="true" x-text="glyph(t.status)"></span><span x-text="t.status"></span>
+                  </span>
+                </td>
+                <td class="time" data-label="Time" x-text="(now, taskTime(t))"></td>
+                <td class="desc" data-label="Task" :title="t.description" x-text="t.description"></td>
+                <td data-label="" class="row-actions">
+                  <button class="mini" @click="taskLog(t.id)">log</button>
+                  <button class="mini danger" x-show="t.status==='pending'" @click="cancel(t.id)">cancel</button>
+                </td>
+              </tr>
+            </template>
+          </tbody>
         </table>
       </section>
     </div>
@@ -328,25 +406,52 @@
       <section class="card compose">
         <div class="section-head"><h2>New task</h2></div>
         <label for="agent">Agent</label>
-        <select id="agent" aria-label="target agent"></select>
+        <select id="agent" x-model="composeAgent" aria-label="target agent">
+          <template x-for="a in agents" :key="a.name"><option :value="a.name" x-text="a.name"></option></template>
+        </select>
         <label for="desc">Task</label>
-        <textarea id="desc" placeholder="Describe what this agent should do…"></textarea>
+        <textarea id="desc" x-ref="desc" x-model="composeText"
+                  @keydown.enter="if($event.ctrlKey||$event.metaKey){$event.preventDefault(); queueTask();}"
+                  placeholder="Describe what this agent should do…"></textarea>
         <div class="meta">
-          <span class="count" id="charCount">0 chars</span>
-          <button class="mini ghost" id="insertDocBtn" type="button">+ insert doc</button>
-          <button class="primary" id="addBtn" type="button" disabled>Queue task<span class="kbd">⌘⏎</span></button>
+          <span class="count" x-text="composeText.length + ' chars'"></span>
+          <button class="mini ghost" type="button" @click="insertDoc(0)">+ insert doc</button>
+          <button class="primary" type="button" @click="queueTask()" :disabled="!composeText.trim()">Queue task<span class="kbd">⌘⏎</span></button>
         </div>
       </section>
 
       <section class="card docs-card">
         <div class="section-head"><h2>Documents</h2></div>
         <label for="docScope">Scope</label>
-        <select id="docScope"></select>
-        <div id="docList" class="doclist"></div>
-        <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload a document — drop a file or activate to browse">
+        <select id="docScope" x-model="docScope" @change="refreshDocs()">
+          <option value="__shared__">Shared (all agents)</option>
+          <template x-for="a in agents" :key="a.name"><option :value="a.name" x-text="a.name"></option></template>
+        </select>
+        <div class="doclist">
+          <template x-if="!docFiles.length">
+            <div class="empty">No documents in this scope. Drop a file to add one.</div>
+          </template>
+          <template x-for="(f,i) in docFiles" :key="f.name">
+            <div class="docrow">
+              <div class="docmeta">
+                <span class="name" :title="f.name" x-text="f.name"></span>
+                <span class="meta" x-text="fmtSize(f.size) + ' · ' + new Date(f.modified).toLocaleDateString()"></span>
+              </div>
+              <div class="row-actions">
+                <button class="mini" @click="insertDoc(i)">insert</button>
+                <button class="mini danger" @click="deleteDoc(i)">delete</button>
+              </div>
+            </div>
+          </template>
+        </div>
+        <div class="dropzone" :class="{drag:dragging}" tabindex="0" role="button"
+             @click="$refs.docFile.click()" @keydown.enter.prevent="$refs.docFile.click()" @keydown.space.prevent="$refs.docFile.click()"
+             @dragenter.prevent="dragging=true" @dragover.prevent="dragging=true"
+             @dragleave.prevent="dragging=false" @drop.prevent="dragging=false; uploadFile($event.dataTransfer.files[0])"
+             aria-label="Upload a document — drop a file or activate to browse">
           ⤓ Drop a file here, or <span class="link">browse</span>
         </div>
-        <input type="file" id="docFile" hidden>
+        <input type="file" x-ref="docFile" hidden @change="uploadFile($event.target.files[0]); $event.target.value=''">
       </section>
     </aside>
   </div>
@@ -354,19 +459,21 @@
   <footer class="foot">Shortcuts: <b>n</b> new task · <b>r</b> refresh · <b>?</b> all shortcuts</footer>
 </div>
 
-<dialog class="logbox" id="logbox" aria-label="log viewer">
+<dialog class="logbox" x-ref="logbox" aria-label="log viewer"
+        @close="stopFollow()" @click="if($event.target===$refs.logbox) $refs.logbox.close()">
   <div class="hd">
-    <span class="title" id="logTitle">Log</span>
-    <button class="mini" id="logCopy" type="button">Copy</button>
-    <button class="mini" id="logWrap" type="button">Wrap</button>
-    <button class="mini" id="logRefresh" type="button" title="Refresh" aria-label="refresh log">⟳</button>
-    <button class="mini" id="logFollow" type="button" title="Auto-refresh every 2s">Follow</button>
-    <button class="mini" id="logClose" type="button" title="Close" aria-label="close">✕</button>
+    <span class="title" x-text="log.title">Log</span>
+    <button class="mini" type="button" @click="copyLog()">Copy</button>
+    <button class="mini" type="button" @click="log.wrap=!log.wrap">Wrap</button>
+    <button class="mini" type="button" @click="refreshLog()" title="Refresh" aria-label="refresh log">⟳</button>
+    <button class="mini" id="logFollow" type="button" :class="{active:log.follow}" @click="toggleFollow()" title="Auto-refresh every 2s">Follow</button>
+    <button class="mini" type="button" @click="$refs.logbox.close()" title="Close" aria-label="close">✕</button>
   </div>
-  <pre id="logBody">…</pre>
+  <pre x-ref="logBody" :class="{wrap:log.wrap}" x-text="log.text">…</pre>
 </dialog>
 
-<dialog class="cheat" id="cheat" aria-label="keyboard shortcuts">
+<dialog class="cheat" x-ref="cheat" aria-label="keyboard shortcuts"
+        @click="if($event.target===$refs.cheat) $refs.cheat.close()">
   <h2>Keyboard shortcuts</h2>
   <dl>
     <dt>n &nbsp;/</dt><dd>Focus the New-task box</dd>
@@ -376,457 +483,209 @@
     <dt>Esc</dt><dd>Close a dialog</dd>
     <dt>?</dt><dd>Toggle this help</dd>
   </dl>
-  <div class="close-row"><button class="mini" id="cheatClose" type="button">Close</button></div>
+  <div class="close-row"><button class="mini" type="button" @click="$refs.cheat.close()">Close</button></div>
 </dialog>
 
-<div class="toasts" id="toasts" aria-live="polite"></div>
+<div class="toasts" aria-live="polite">
+  <template x-for="t in toasts" :key="t.id">
+    <div class="toast" :class="t.kind" x-text="t.msg"></div>
+  </template>
+</div>
 
 <script>
-const $ = s => document.querySelector(s);
-const $$ = s => document.querySelectorAll(s);
+function fleet(){
+  return {
+    /* ---- reactive state ---- */
+    agents: [], tasks: [], docFiles: [], docScope: '__shared__',
+    reply: {},                      // per-agent message-box text
+    composeAgent: '', composeText: '',
+    connected: null,                // null=connecting, true, false
+    booted: false,
+    lastPollAt: Date.now(), pollSecs: 0, now: Date.now(),
+    dragging: false,
+    toasts: [], _toastId: 0,
+    log: { title:'Log', text:'…', wrap:false, follow:false, source:null },
+    _followTimer: null,
 
-let agentsCache = [];
-let docCache = [];
-let lastPollAt = Date.now();
+    /* ---- lifecycle ---- */
+    init(){
+      this.refresh().then(()=>this.refreshDocs());
+      setInterval(()=>this.refresh(), 2500);
+      setInterval(()=>{ this.now = Date.now();
+        this.pollSecs = Math.max(0, Math.round((Date.now()-this.lastPollAt)/1000)); }, 1000);
+      window.addEventListener('keydown', e=>this.onKey(e));
+    },
 
-async function api(path, opts){ const r = await fetch(path, opts); return r.json(); }
+    /* ---- helpers ---- */
+    api(path, opts){ return fetch(path, opts).then(r=>r.json()); },
+    glyph(s){ return ({pending:'⋯',running:'◐',done:'✓',failed:'✕',canceled:'⊘'})[s] || ''; },
+    fmtSize(n){ if(n<1024) return n+' B'; if(n<1048576) return (n/1024).toFixed(1)+' KB'; return (n/1048576).toFixed(1)+' MB'; },
+    mmss(sec){ return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0'); },
+    dur(from, to){
+      if(!from) return '';
+      const s = Math.max(0, Math.round(((to?Date.parse(to):this.now) - Date.parse(from))/1000));
+      if(s<60) return s+'s';
+      const m = Math.floor(s/60); if(m<60) return m+'m '+(s%60)+'s';
+      const h = Math.floor(m/60); return h+'h '+(m%60)+'m';
+    },
+    durSince(iso){ return this.dur(iso, null); },
+    taskTime(t){
+      if(t.status==='running') return t.started_at ? this.dur(t.started_at, null) : '—';
+      if(t.finished_at && (t.started_at||t.created_at)) return this.dur(t.started_at||t.created_at, t.finished_at);
+      return '—';
+    },
 
-// Escape every API string before interpolating it — the XSS guard. (& < > ").
-function esc(x){ return (x||"").replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+    /* ---- derived views ---- */
+    get sortedAgents(){
+      const rank = a => ({attn:0,busy:1,idle:2,offline:3})[a.attention?'attn':a.activity] ?? 9;
+      return this.agents.slice().sort((x,y)=> rank(x)-rank(y) || String(x.name).localeCompare(String(y.name)));
+    },
+    get attnNames(){ return this.agents.filter(a=>a.attention).map(a=>a.name); },
+    get failedTasks(){ return this.tasks.filter(t=>t.status==='failed'); },
+    get summaryHtml(){
+      const c = this.tasks.reduce((m,t)=>(m[t.status]=(m[t.status]||0)+1,m),{});
+      const attn = this.attnNames.length;
+      let h = `${this.agents.length} agents · ${c.running||0} running · ${c.pending||0} pending · ${c.done||0} done`;
+      if(attn) h += ` · <span class="needs">⚠ ${attn} need${attn>1?'':'s'} you</span>`;
+      document.title = (attn ? `(${attn}) ` : '') + 'Claude Fleet';
+      return h;
+    },
 
-const AGENT_GLYPH = {pending:'⋯',running:'◐',done:'✓',failed:'✕',canceled:'⊘'};
-function badge(act){ return `<span class="badge" data-s="${act}" aria-label="status: ${act}"><span class="d"></span>${act}</span>`; }
-function pill(s){
-  const g = AGENT_GLYPH[s] || '';
-  const cls = s==='running' ? 'spin' : '';
-  return `<span class="pill" data-s="${s}" aria-label="status: ${s}"><span class="${cls}" aria-hidden="true">${g}</span>${s}</span>`;
+    /* ---- poll ---- */
+    async refresh(){
+      try{
+        const s = await this.api('/api/state');
+        this.lastPollAt = Date.now();
+        this.agents = s.agents || [];
+        this.tasks = s.tasks || [];
+        this.connected = true;
+        this.booted = true;
+      }catch(e){ this.connected = false; }
+    },
+
+    /* ---- documents ---- */
+    docScopeValue(){ return this.docScope==='__shared__' ? {scope:'shared'} : {scope:'agent', name:this.docScope}; },
+    async refreshDocs(){
+      const s = this.docScopeValue();
+      const q = s.scope==='shared' ? 'scope=shared' : 'scope=agent&name='+encodeURIComponent(s.name);
+      try{ const r = await this.api('/api/docs?'+q); this.docFiles = r.files || []; }
+      catch(e){ this.docFiles = []; }
+    },
+    insertDoc(i){
+      const f = this.docFiles[i];
+      if(!f){ this.toast('No documents in this scope.','err'); return; }
+      const sep = this.composeText && !this.composeText.endsWith('\n') ? '\n' : '';
+      this.composeText += sep + f.path;
+      this.$refs.desc && this.$refs.desc.focus();
+    },
+    async uploadFile(file){
+      if(!file) return;
+      if(file.size > 25*1024*1024){ this.toast('File is too large (max 25 MB).','err'); return; }
+      let b64;
+      try{
+        b64 = await new Promise((res,rej)=>{ const fr = new FileReader();
+          fr.onload = ()=>res(String(fr.result).split(',')[1]); fr.onerror = rej; fr.readAsDataURL(file); });
+      }catch(e){ this.toast('Could not read file: '+(e.message||e),'err'); return; }
+      const r = await this.api('/api/docs/upload',{method:'POST',headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({...this.docScopeValue(), filename:file.name, content_base64:b64})});
+      if(r.error){ this.toast(r.error,'err'); return; }
+      this.toast('Uploaded '+file.name); this.refreshDocs();
+    },
+    async deleteDoc(i){
+      const f = this.docFiles[i]; if(!f) return;
+      if(!confirm('Delete '+f.name+'?')) return;
+      const r = await this.api('/api/docs/delete',{method:'POST',headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({...this.docScopeValue(), filename:f.name})});
+      if(r && r.error){ this.toast(r.error,'err'); return; }
+      this.toast('Deleted '+f.name); this.refreshDocs();
+    },
+
+    /* ---- actions ---- */
+    async queueTask(){
+      const agent = this.composeAgent || (this.agents[0] && this.agents[0].name);
+      const description = this.composeText.trim();
+      if(!description || !agent) return;
+      const r = await this.api('/api/tasks',{method:'POST',headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({agent, description})});
+      if(r.error){ this.toast(r.error,'err'); return; }
+      this.composeText = '';
+      this.toast('Queued '+(r.id||'task')+' → '+agent); this.refresh();
+    },
+    async sendMsg(name){
+      const message = (this.reply[name]||'').trim();
+      if(!message) return;
+      const r = await this.api('/api/agent/send',{method:'POST',headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({name, message})});
+      if(r.error){ this.toast(r.error,'err'); return; }
+      this.reply[name] = ''; this.toast('Sent to '+name); this.refresh();
+    },
+    async cancel(id){
+      await this.api('/api/task/cancel',{method:'POST',headers:{'Content-Type':'application/json'},body: JSON.stringify({id})});
+      this.toast('Canceled '+id); this.refresh();
+    },
+    async restart(name){
+      if(!confirm('Restart agent '+name+'?')) return;
+      await this.api('/api/agent/restart',{method:'POST',headers:{'Content-Type':'application/json'},body: JSON.stringify({name})});
+      this.toast('Restarting '+name); this.refresh();
+    },
+    jumpToAttn(){
+      const first = document.querySelector('#agents-anchor, .agent.attn') || document.querySelector('.agent.attn');
+      const el = document.querySelector('.agent.attn');
+      if(el){ el.scrollIntoView({behavior:'smooth', block:'center'}); const inp = el.querySelector('input'); if(inp) inp.focus(); }
+    },
+
+    /* ---- log viewer ---- */
+    async fetchLogText(){
+      if(!this.log.source) return '';
+      if(this.log.source.kind==='live'){
+        const r = await this.api('/api/logs?agent='+encodeURIComponent(this.log.source.name)+'&lines=300'); return r.text;
+      }
+      const r = await this.api('/api/task/log?id='+encodeURIComponent(this.log.source.id)); return r.text;
+    },
+    openLog(title, text, source){
+      this.log.title = title; this.log.text = text || '(empty)'; this.log.source = source;
+      if(!this.$refs.logbox.open) this.$refs.logbox.showModal();
+      this.$nextTick(()=>{ const p = this.$refs.logBody; p.scrollTop = p.scrollHeight; });
+    },
+    async refreshLog(){
+      const t = await this.fetchLogText(); this.log.text = t || '(empty)';
+      this.$nextTick(()=>{ const p = this.$refs.logBody; p.scrollTop = p.scrollHeight; });
+    },
+    async taskLog(id){ const r = await this.api('/api/task/log?id='+encodeURIComponent(id)); this.openLog('Task '+id+' log', r.text, {kind:'task', id}); },
+    async liveLog(name){ const r = await this.api('/api/logs?agent='+encodeURIComponent(name)+'&lines=300'); this.openLog('Live: '+name, r.text, {kind:'live', name}); },
+    stopFollow(){ if(this._followTimer){ clearInterval(this._followTimer); this._followTimer = null; } this.log.follow = false; },
+    toggleFollow(){
+      if(this._followTimer){ this.stopFollow(); return; }
+      this.log.follow = true; this._followTimer = setInterval(()=>this.refreshLog(), 2000); this.refreshLog();
+    },
+    copyLog(){
+      const text = this.$refs.logBody.textContent;
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(()=>this.toast('Copied to clipboard')).catch(()=>this.toast('Copy failed','err'));
+      } else {
+        const range = document.createRange(); range.selectNodeContents(this.$refs.logBody);
+        const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+        try{ document.execCommand('copy'); this.toast('Copied to clipboard'); }catch(e){ this.toast('Copy failed','err'); }
+      }
+    },
+
+    /* ---- toasts ---- */
+    toast(msg, kind='ok'){
+      const id = ++this._toastId; this.toasts.push({id, msg, kind});
+      setTimeout(()=>{ this.toasts = this.toasts.filter(t=>t.id!==id); }, kind==='err' ? 6000 : 3500);
+    },
+
+    /* ---- keyboard shortcuts ---- */
+    onKey(e){
+      if(e.key==='Escape') return;   // <dialog> handles Esc natively
+      const tag = document.activeElement && document.activeElement.tagName;
+      if(/^(INPUT|TEXTAREA|SELECT)$/.test(tag||'')) return;
+      if(e.key==='n' || e.key==='/'){ e.preventDefault(); this.$refs.desc && this.$refs.desc.focus(); }
+      else if(e.key==='r'){ e.preventDefault(); this.refresh(); }
+      else if(e.key==='?'){ e.preventDefault(); const c = this.$refs.cheat; c.open ? c.close() : c.showModal(); }
+    },
+  };
 }
-
-// "1m 20s" style duration between two ISO times (or now if `to` is null).
-function dur(from, to){
-  if(!from) return "";
-  const s = Math.max(0, Math.round(((to?Date.parse(to):Date.now()) - Date.parse(from))/1000));
-  if(s < 60) return s+"s";
-  const m = Math.floor(s/60); if(m < 60) return m+"m "+(s%60)+"s";
-  const h = Math.floor(m/60); return h+"h "+(m%60)+"m";
-}
-function mmss(sec){ return Math.floor(sec/60)+":"+String(sec%60).padStart(2,"0"); }
-
-function fmtSize(n){
-  if(n < 1024) return n+" B";
-  if(n < 1048576) return (n/1024).toFixed(1)+" KB";
-  return (n/1048576).toFixed(1)+" MB";
-}
-
-/* ---------- Agents ---------- */
-const AGENT_ORDER = {attn:0, busy:1, idle:2, offline:3};
-function agentRank(a){ const r = AGENT_ORDER[a.attention ? 'attn' : a.activity]; return r===undefined ? 9 : r; }
-
-function agentCard(a){
-  const s = a.attention ? 'attn' : a.activity;
-  const off = a.activity === 'offline';
-  const statusBadge = a.attention
-    ? `<span class="badge" data-s="attn" aria-label="status: needs you"><span class="d"></span>needs you</span>`
-    : badge(a.activity);
-  let cur = '';
-  if(a.current_task){
-    cur = `<div class="cur"><span aria-hidden="true">▶</span>
-      <span class="desc" title="${esc(a.current_desc||'')}">${esc(a.current_task)} · ${esc(a.current_desc||'')}</span>
-      <span class="elapsed" data-since="${esc(a.current_started||'')}">${a.current_started?'· '+dur(a.current_started,null):''}</span></div>`;
-  } else if(a.activity === 'idle'){
-    cur = `<div class="cur-idle">idle · waiting for work</div>`;
-  }
-  return `
-    <div class="agent${a.attention?' attn':''}${off?' offline':''}" data-s="${s}" data-name="${esc(a.name)}">
-      <div class="top">
-        <span class="name">${esc(a.name)}</span>
-        ${statusBadge}
-      </div>
-      <div class="role">${a.role ? esc(a.role) : '<span class="muted">no role set</span>'}</div>
-      <div class="path" title="${esc(a.project_dir)}">${esc(a.project_dir)}</div>
-      ${cur}
-      <div class="reply">
-        <input aria-label="message ${esc(a.name)}" placeholder="message ${esc(a.name)}…" data-name="${esc(a.name)}">
-        <button class="mini" data-act="send" data-name="${esc(a.name)}"${off?' disabled title="agent is offline"':''}>Send</button>
-      </div>
-      <div class="actions">
-        <button class="mini ghost" data-act="log" data-name="${esc(a.name)}">⧉ live log</button>
-        <button class="mini ghost danger" data-act="restart" data-name="${esc(a.name)}">⟲ restart</button>
-      </div>
-    </div>`;
-}
-
-function renderAgents(agents){
-  agentsCache = agents;
-  const grid = $("#agents");
-  if(!agents.length){
-    grid.innerHTML = `<div class="empty">No agents configured. Edit fleet.json and run ./fleet up.</div>`;
-  } else {
-    const sorted = agents.slice().sort((x,y)=> agentRank(x)-agentRank(y) || String(x.name).localeCompare(String(y.name)));
-    grid.innerHTML = sorted.map(agentCard).join("");
-  }
-  // keep the agent dropdown in sync, preserving the current selection
-  const sel = $("#agent"), prev = sel.value;
-  sel.innerHTML = agents.map(a=>`<option value="${esc(a.name)}">${esc(a.name)}</option>`).join("");
-  if([...sel.options].some(o=>o.value===prev)) sel.value = prev;
-  renderDocScopes(agents);
-}
-
-/* ---------- Documents ---------- */
-function docScopeValue(){
-  const v = $("#docScope").value;
-  return v === "__shared__" ? {scope:"shared"} : {scope:"agent", name:v};
-}
-
-function renderDocScopes(agents){
-  const sel = $("#docScope"), prev = sel.value;
-  sel.innerHTML = `<option value="__shared__">Shared (all agents)</option>` +
-    agents.map(a=>`<option value="${esc(a.name)}">${esc(a.name)}</option>`).join("");
-  if([...sel.options].some(o=>o.value===prev)) sel.value = prev;
-}
-
-async function refreshDocs(){
-  const s = docScopeValue();
-  const q = s.scope==="shared" ? "scope=shared" : "scope=agent&name="+encodeURIComponent(s.name);
-  const r = await api("/api/docs?"+q);
-  docCache = r.files || [];
-  $("#docList").innerHTML = docCache.length ? docCache.map((f,i)=>`
-    <div class="docrow">
-      <div class="docmeta"><span class="name" title="${esc(f.name)}">${esc(f.name)}</span>
-        <span class="meta">${fmtSize(f.size)} · ${esc(new Date(f.modified).toLocaleDateString())}</span></div>
-      <div class="row-actions">
-        <button class="mini" data-act="insert" data-i="${i}">insert</button>
-        <button class="mini danger" data-act="delete" data-i="${i}">delete</button>
-      </div>
-    </div>`).join("") : `<div class="empty">No documents in this scope. Drop a file to add one.</div>`;
-}
-
-function insertDocPath(i){
-  const f = docCache[i]; if(!f) return;
-  const ta = $("#desc");
-  const sep = ta.value && !ta.value.endsWith("\n") ? "\n" : "";
-  ta.value += sep + f.path; ta.focus(); updateCompose();
-}
-
-// Shared upload path — used by both drop and the file picker.
-async function uploadFile(file){
-  if(!file) return;
-  if(file.size > 25 * 1024 * 1024){ toast("File is too large (max 25 MB).", "err"); return; }
-  let b64;
-  try {
-    b64 = await new Promise((res,rej)=>{
-      const fr = new FileReader();
-      fr.onload = () => res(String(fr.result).split(",")[1]);
-      fr.onerror = rej;
-      fr.readAsDataURL(file);
-    });
-  } catch(e) { toast("Could not read file: " + (e.message||e), "err"); return; }
-  const r = await api("/api/docs/upload",{method:"POST",headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({...docScopeValue(), filename:file.name, content_base64:b64})});
-  if(r.error){ toast(r.error, "err"); return; }
-  toast("Uploaded "+file.name); refreshDocs();
-}
-
-async function deleteDoc(i){
-  const f = docCache[i]; if(!f) return;
-  if(!confirm("Delete "+f.name+"?")) return;
-  const r = await api("/api/docs/delete",{method:"POST",headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({...docScopeValue(), filename:f.name})});
-  if(r && r.error){ toast(r.error, "err"); return; }
-  toast("Deleted "+f.name); refreshDocs();
-}
-
-/* ---------- Tasks ---------- */
-function taskTime(t){
-  if(t.status==='running') return t.started_at ? dur(t.started_at,null) : '—';
-  if(t.finished_at && (t.started_at||t.created_at)) return dur(t.started_at||t.created_at, t.finished_at);
-  return '—';
-}
-
-function renderTasks(tasks){
-  const tb = $("#tasks");
-  if(!tasks.length){
-    tb.innerHTML = `<tr><td colspan="6"><div class="empty">No tasks yet — queue one from “New task”.</div></td></tr>`;
-    return;
-  }
-  tb.innerHTML = tasks.map(t => `
-    <tr data-s="${t.status}">
-      <td class="id" data-label="ID">${esc(t.id)}</td>
-      <td data-label="Agent">${esc(t.agent)}</td>
-      <td data-label="Status">${pill(t.status)}</td>
-      <td class="time elapsed" data-label="Time" data-running="${t.status==='running'?esc(t.started_at||''):''}">${taskTime(t)}</td>
-      <td class="desc" data-label="Task" title="${esc(t.description)}">${esc(t.description)}</td>
-      <td data-label="" class="row-actions">
-        <button class="mini" data-act="tasklog" data-id="${esc(t.id)}">log</button>
-        ${t.status==='pending' ? `<button class="mini danger" data-act="cancel" data-id="${esc(t.id)}">cancel</button>` : ''}
-      </td>
-    </tr>`).join("");
-}
-
-/* ---------- Attention ---------- */
-function renderAttention(agents, tasks){
-  const need = agents.filter(a=>a.attention).map(a=>a.name);
-  const failed = tasks.filter(t=>t.status==='failed');
-  const el = $("#attention");
-  if(!need.length && !failed.length){ el.hidden = true; el.innerHTML = ""; return; }
-  const parts = [`<span aria-hidden="true">⚠</span>`];
-  if(need.length) parts.push(`<span><strong>Needs you:</strong> ${need.map(esc).join(", ")}</span>`);
-  if(failed.length) parts.push(`<span class="chip">✕ ${failed.length} failed task${failed.length>1?'s':''}</span>`);
-  if(need.length) parts.push(`<button class="mini jump" id="attnJump" type="button">Jump to first ▸</button>`);
-  el.innerHTML = parts.join("");
-  el.hidden = false;
-}
-
-/* ---------- Header / connection ---------- */
-function renderHeader(agents, tasks){
-  const counts = tasks.reduce((m,t)=>(m[t.status]=(m[t.status]||0)+1,m),{});
-  const attn = agents.filter(a=>a.attention).length;
-  let html = `${agents.length} agents · ${counts.running||0} running · ${counts.pending||0} pending · ${counts.done||0} done`;
-  if(attn) html += ` · <span class="needs">⚠ ${attn} need${attn>1?'':'s'} you</span>`;
-  $("#summary").innerHTML = html;
-  document.title = (attn ? `(${attn}) ` : "") + "Claude Fleet";
-}
-
-function setConnected(ok){
-  const dot = $("#livedot");
-  dot.classList.remove("loading");
-  if(ok){
-    dot.classList.remove("bad");
-    dot.title = "Connected"; dot.setAttribute("aria-label","Connected");
-    $("#connBanner").hidden = true;
-  } else {
-    dot.classList.add("bad");
-    dot.title = "Connection lost — retrying"; dot.setAttribute("aria-label","Connection lost — retrying");
-    $("#connBanner").hidden = false;
-  }
-}
-
-/* ---------- Skeletons / poll loop ---------- */
-function renderSkeletons(){
-  $("#agents").innerHTML = Array.from({length:3}).map(()=>`
-    <div class="agent">
-      <div class="skel" style="height:14px;width:45%"></div>
-      <div class="skel" style="height:10px;width:65%"></div>
-      <div class="skel" style="height:10px;width:85%"></div>
-    </div>`).join("");
-  $("#tasks").innerHTML = Array.from({length:3}).map(()=>`
-    <tr><td colspan="6"><div class="skel" style="height:16px;width:100%"></div></td></tr>`).join("");
-}
-
-async function refresh(){
-  try{
-    const s = await api("/api/state");
-    lastPollAt = Date.now();
-    if(!typingInAgents()) renderAgents(s.agents);
-    renderTasks(s.tasks);
-    renderAttention(s.agents, s.tasks);
-    renderHeader(s.agents, s.tasks);
-    setConnected(true);
-  }catch(e){
-    setConnected(false);
-  }
-}
-
-// Is the user mid-edit inside an agent reply box? If so, don't re-render/re-sort
-// the agents grid out from under them on the next poll.
-function typingInAgents(){
-  const el = document.activeElement;
-  return el && el.tagName === "INPUT" && el.closest("#agents");
-}
-
-// Tick elapsed-time labels every second so durations advance between polls,
-// and update the "seconds since last poll" indicator.
-function tick(){
-  $$('.cur .elapsed[data-since]').forEach(el=>{
-    if(el.dataset.since) el.textContent = "· " + dur(el.dataset.since, null);
-  });
-  $$('td.elapsed[data-running]').forEach(el=>{
-    if(el.dataset.running) el.textContent = dur(el.dataset.running, null);
-  });
-  $("#pollTime").textContent = mmss(Math.max(0, Math.round((Date.now()-lastPollAt)/1000)));
-}
-
-/* ---------- Actions ---------- */
-function updateCompose(){
-  const v = $("#desc").value;
-  $("#charCount").textContent = v.length + " chars";
-  $("#addBtn").disabled = !v.trim();
-}
-
-async function queueTask(){
-  const agent = $("#agent").value, description = $("#desc").value.trim();
-  if(!description) return;
-  const btn = $("#addBtn"); btn.disabled = true;
-  const r = await api("/api/tasks", {method:"POST", headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({agent, description})});
-  if(r.error){ toast(r.error, "err"); btn.disabled = false; return; }
-  $("#desc").value = ""; updateCompose();
-  toast("Queued " + (r.id || "task") + " → " + agent);
-  refresh();
-}
-
-async function sendMsg(name, input){
-  const message = input.value.trim();
-  if(!message) return;
-  const r = await api("/api/agent/send",{method:"POST",headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({name,message})});
-  if(r.error){ toast(r.error, "err"); return; }
-  input.value = ""; toast("Sent to " + name); refresh();
-}
-
-async function cancel(id){
-  await api("/api/task/cancel",{method:"POST",headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({id})});
-  toast("Canceled " + id); refresh();
-}
-
-async function restart(name){
-  if(!confirm("Restart agent "+name+"?")) return;
-  await api("/api/agent/restart",{method:"POST",headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({name})});
-  toast("Restarting " + name); refresh();
-}
-
-/* ---------- Log modal (native <dialog>) ---------- */
-let logSource = null;     // {kind:'live', name} | {kind:'task', id}
-let followTimer = null;
-
-async function fetchLogText(){
-  if(!logSource) return "";
-  if(logSource.kind === 'live'){
-    const r = await api("/api/logs?agent="+encodeURIComponent(logSource.name)+"&lines=300");
-    return r.text;
-  }
-  const r = await api("/api/task/log?id="+encodeURIComponent(logSource.id));
-  return r.text;
-}
-
-function openLog(title, text, source){
-  logSource = source;
-  $("#logTitle").textContent = title;
-  const pre = $("#logBody"); pre.textContent = text || "(empty)";
-  const dlg = $("#logbox");
-  if(!dlg.open) dlg.showModal();
-  pre.scrollTop = pre.scrollHeight;
-}
-
-async function refreshLog(){
-  const t = await fetchLogText();
-  const pre = $("#logBody"); pre.textContent = t || "(empty)";
-  pre.scrollTop = pre.scrollHeight;
-}
-
-function stopFollow(){ if(followTimer){ clearInterval(followTimer); followTimer = null; } $("#logFollow").classList.remove("active"); }
-function toggleFollow(){
-  if(followTimer){ stopFollow(); return; }
-  $("#logFollow").classList.add("active");
-  followTimer = setInterval(refreshLog, 2000);
-  refreshLog();
-}
-
-function copyLog(){
-  const text = $("#logBody").textContent;
-  if(navigator.clipboard && navigator.clipboard.writeText){
-    navigator.clipboard.writeText(text).then(()=>toast("Copied to clipboard")).catch(()=>toast("Copy failed","err"));
-  } else {
-    const range = document.createRange(); range.selectNodeContents($("#logBody"));
-    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
-    try { document.execCommand("copy"); toast("Copied to clipboard"); }
-    catch(e){ toast("Copy failed", "err"); }
-  }
-}
-
-async function taskLog(id){ const r = await api("/api/task/log?id="+encodeURIComponent(id)); openLog("Task "+id+" log", r.text, {kind:'task', id}); }
-async function liveLog(name){ const r = await api("/api/logs?agent="+encodeURIComponent(name)+"&lines=300"); openLog("Live: "+name, r.text, {kind:'live', name}); }
-
-/* ---------- Toasts ---------- */
-function toast(msg, kind='ok'){
-  const el = document.createElement('div');
-  el.className = 'toast ' + kind;
-  el.textContent = msg;
-  $("#toasts").append(el);
-  setTimeout(()=>el.remove(), kind==='err' ? 6000 : 3500);
-}
-
-/* ---------- Wiring ---------- */
-// Compose
-$("#desc").addEventListener("input", updateCompose);
-$("#desc").addEventListener("keydown", e=>{ if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){ e.preventDefault(); queueTask(); } });
-$("#addBtn").onclick = queueTask;
-$("#insertDocBtn").onclick = ()=>{ if(docCache.length) insertDocPath(0); else toast("No documents in this scope.","err"); };
-
-// Documents
-$("#docScope").addEventListener("change", refreshDocs);
-$("#docFile").addEventListener("change", e=>{ const f = e.target.files[0]; if(f) uploadFile(f); e.target.value = ""; });
-const dz = $("#dropzone");
-dz.addEventListener("click", ()=>$("#docFile").click());
-dz.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); $("#docFile").click(); } });
-['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev, e=>{ e.preventDefault(); dz.classList.add('drag'); }));
-['dragleave','drop'].forEach(ev=>dz.addEventListener(ev, e=>{ e.preventDefault(); dz.classList.remove('drag'); }));
-dz.addEventListener('drop', e=>{ const f = e.dataTransfer.files[0]; if(f) uploadFile(f); });
-
-// Delegated actions (agents / tasks / docs / attention)
-$("#agents").addEventListener("click", e=>{
-  const btn = e.target.closest("button[data-act]"); if(!btn) return;
-  const name = btn.dataset.name;
-  if(btn.dataset.act==="send"){ sendMsg(name, btn.closest(".reply").querySelector("input")); }
-  else if(btn.dataset.act==="log"){ liveLog(name); }
-  else if(btn.dataset.act==="restart"){ restart(name); }
-});
-$("#agents").addEventListener("keydown", e=>{
-  if(e.key==="Enter" && e.target.tagName==="INPUT") sendMsg(e.target.dataset.name, e.target);
-});
-$("#tasks").addEventListener("click", e=>{
-  const btn = e.target.closest("button[data-act]"); if(!btn) return;
-  if(btn.dataset.act==="tasklog") taskLog(btn.dataset.id);
-  else if(btn.dataset.act==="cancel") cancel(btn.dataset.id);
-});
-$("#docList").addEventListener("click", e=>{
-  const btn = e.target.closest("button[data-act]"); if(!btn) return;
-  const i = Number(btn.dataset.i);
-  if(btn.dataset.act==="insert") insertDocPath(i);
-  else if(btn.dataset.act==="delete") deleteDoc(i);
-});
-$("#attention").addEventListener("click", e=>{
-  if(!e.target.closest("#attnJump")) return;
-  const first = $("#agents .agent.attn");
-  if(first){ first.scrollIntoView({behavior:"smooth", block:"center"}); const inp = first.querySelector("input"); if(inp) inp.focus(); }
-});
-
-// Log dialog
-const dlg = $("#logbox");
-$("#logClose").onclick = ()=>dlg.close();
-$("#logRefresh").onclick = refreshLog;
-$("#logWrap").onclick = ()=>$("#logBody").classList.toggle("wrap");
-$("#logCopy").onclick = copyLog;
-$("#logFollow").onclick = toggleFollow;
-dlg.addEventListener("click", e=>{ if(e.target === dlg) dlg.close(); });   // backdrop click
-dlg.addEventListener("close", stopFollow);
-
-// Cheat sheet
-const cheat = $("#cheat");
-$("#cheatClose").onclick = ()=>cheat.close();
-cheat.addEventListener("click", e=>{ if(e.target === cheat) cheat.close(); });
-
-// Poll indicator doubles as a manual refresh
-$("#poll").onclick = refresh;
-
-// Global single-key shortcuts (suppressed while typing in a field)
-document.addEventListener("keydown", e=>{
-  if(e.key === "Escape") return;   // <dialog> handles Esc natively
-  const tag = document.activeElement && document.activeElement.tagName;
-  if(/^(INPUT|TEXTAREA|SELECT)$/.test(tag||"")) return;
-  if(e.key === "n" || e.key === "/"){ e.preventDefault(); $("#desc").focus(); }
-  else if(e.key === "r"){ e.preventDefault(); refresh(); }
-  else if(e.key === "?"){ e.preventDefault(); if(cheat.open) cheat.close(); else cheat.showModal(); }
-});
-
-// Boot
-renderSkeletons();
-updateCompose();
-refresh().then(refreshDocs);
-setInterval(refresh, 2500);
-setInterval(tick, 1000);
 </script>
 </body>
 </html>
