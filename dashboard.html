@@ -293,6 +293,32 @@
   @keyframes shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
   .empty{padding:var(--sp-6);text-align:center;color:var(--text-dim);font-size:var(--fs-400)}
 
+  /* ---- Tabs ---- */
+  .tabs{display:flex;gap:var(--sp-1);margin:0 0 var(--sp-4);border-bottom:1px solid var(--border)}
+  .tab{background:none;border:none;border-bottom:2px solid transparent;border-radius:0;
+    color:var(--text-dim);padding:8px 14px;font-size:var(--fs-400);font-weight:600}
+  .tab:hover{background:none;color:var(--text)}
+  .tab.active{color:var(--text);border-bottom-color:var(--accent)}
+
+  /* ---- Topology / Connections ---- */
+  .topo{display:flex;flex-direction:column;align-items:center;gap:var(--sp-2);padding:var(--sp-2) 0}
+  .topo-row{display:flex;flex-wrap:wrap;gap:var(--sp-3);justify-content:center;width:100%}
+  .tnode{background:var(--surface-2);border:1px solid var(--border);border-left:4px solid var(--st-off);
+    border-radius:var(--r-md);padding:var(--sp-3);min-width:210px;max-width:340px}
+  .tnode[data-s="busy"]{border-left-color:var(--st-busy)}
+  .tnode[data-s="idle"]{border-left-color:var(--st-ok)}
+  .tnode[data-s="offline"]{border-left-color:var(--st-off);opacity:.7}
+  .tnode[data-s="attn"]{border-left-color:var(--st-alert);box-shadow:0 0 0 1px var(--st-alert) inset}
+  .tnode.you,.tnode.disp{border-left-color:var(--accent)}
+  .tnode .tname{font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .tnode .tdesc{color:var(--text-dim);font-size:var(--fs-300);margin-top:4px}
+  .tnode .tcur{color:var(--accent);font-size:var(--fs-200);font-family:var(--mono);margin-top:6px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tarrow{color:var(--text-faint);font-size:var(--fs-300);letter-spacing:.04em}
+  .topo-legend{margin-top:var(--sp-4);color:var(--text-dim);font-size:var(--fs-400);line-height:1.6;
+    border-top:1px solid var(--border);padding-top:var(--sp-3)}
+  .topo-legend b{color:var(--text);font-weight:600}
+
   /* ---- Footer ---- */
   .foot{margin-top:var(--sp-5);text-align:center;color:var(--text-faint);font-size:var(--fs-200)}
   .foot b{color:var(--text-dim);font-family:var(--mono);font-weight:400}
@@ -312,6 +338,12 @@
 <div class="shell">
   <div class="conn-banner" x-show="connected===false" role="status">Connection lost — retrying…</div>
 
+  <div class="tabs" role="tablist">
+    <button class="tab" type="button" role="tab" :class="{active:tab==='dashboard'}" :aria-selected="tab==='dashboard'" @click="tab='dashboard'">⊞ Dashboard</button>
+    <button class="tab" type="button" role="tab" :class="{active:tab==='topology'}" :aria-selected="tab==='topology'" @click="tab='topology'">⛓ Connections</button>
+  </div>
+
+  <div x-show="tab==='dashboard'">
   <div class="attention" x-show="attnNames.length || failedTasks.length" aria-live="assertive">
     <span aria-hidden="true">⚠</span>
     <span x-show="attnNames.length"><strong>Needs you:</strong> <span x-text="attnNames.join(', ')"></span></span>
@@ -455,6 +487,56 @@
       </section>
     </aside>
   </div>
+  </div><!-- /dashboard tab -->
+
+  <div x-show="tab==='topology'" x-cloak>
+    <section class="card">
+      <div class="section-head"><h2>How the fleet is connected</h2></div>
+      <div class="topo">
+        <div class="topo-row">
+          <div class="tnode you">
+            <div class="tname">You · Dashboard</div>
+            <div class="tdesc">Queue tasks, message agents, and watch live state from here.</div>
+          </div>
+        </div>
+        <div class="tarrow">▼ &nbsp;queue task · message&nbsp; ▼</div>
+        <div class="topo-row">
+          <div class="tnode disp">
+            <div class="tname">Dispatcher</div>
+            <div class="tdesc">The <b>fleet&nbsp;up</b> loop. Delivers each queued task to its target agent once that agent is idle, then watches it through to done / failed.</div>
+          </div>
+          <div class="tnode mgr" :data-s="manager ? (manager.attention?'attn':manager.activity) : 'offline'">
+            <div class="tname">
+              Manager · <span x-text="manager ? manager.name : '—'"></span>
+              <span class="badge" :data-s="manager ? (manager.attention?'attn':manager.activity) : 'offline'"><span class="d"></span><span x-text="manager ? (manager.attention?'needs you':manager.activity) : 'offline'"></span></span>
+            </div>
+            <div class="tdesc">A worker with a coordinator role: breaks goals into tasks, queues them for the workers, and unsticks stuck ones (peek / message / restart).</div>
+          </div>
+        </div>
+        <div class="tarrow">▼ &nbsp;deliver task · oversee&nbsp; ▼</div>
+        <div class="topo-row">
+          <template x-if="!workers.length"><div class="empty">No worker agents.</div></template>
+          <template x-for="w in workers" :key="w.name">
+            <div class="tnode worker" :data-s="w.attention?'attn':w.activity">
+              <div class="tname">
+                <span x-text="w.name"></span>
+                <span class="badge" :data-s="w.attention?'attn':w.activity"><span class="d"></span><span x-text="w.attention?'needs you':w.activity"></span></span>
+              </div>
+              <div class="tdesc" x-text="w.role || 'no role set'"></div>
+              <div class="tcur" x-show="w.current_task" :title="w.current_desc||''" x-text="'▶ ' + (w.current_task||'') + (w.current_desc ? ' · ' + w.current_desc : '')"></div>
+            </div>
+          </template>
+        </div>
+      </div>
+      <div class="topo-legend">
+        Every agent is an independent <b>claude</b> terminal (ConPTY on Windows, tmux elsewhere)
+        running in the project directory; the orchestrator talks to each over a localhost control
+        socket. <b>You</b> and the <b>manager</b> both queue tasks; the <b>dispatcher</b> delivers each
+        to whichever agent is idle and tracks it to completion. Agents don't message each other
+        directly — they coordinate through the shared task queue and the manager.
+      </div>
+    </section>
+  </div>
 
   <footer class="foot">Shortcuts: <b>n</b> new task · <b>r</b> refresh · <b>?</b> all shortcuts</footer>
 </div>
@@ -501,6 +583,7 @@ function fleet(){
     composeAgent: '', composeText: '',
     connected: null,                // null=connecting, true, false
     booted: false,
+    tab: 'dashboard',
     lastPollAt: Date.now(), pollSecs: 0, now: Date.now(),
     dragging: false,
     toasts: [], _toastId: 0,
@@ -542,6 +625,10 @@ function fleet(){
     },
     get attnNames(){ return this.agents.filter(a=>a.attention).map(a=>a.name); },
     get failedTasks(){ return this.tasks.filter(t=>t.status==='failed'); },
+    // The manager is whichever agent has a coordinator role (or is named 'orch').
+    isManager(a){ return (a.role||'').toLowerCase().includes('manager') || a.name==='orch'; },
+    get manager(){ return this.agents.find(a=>this.isManager(a)) || null; },
+    get workers(){ return this.agents.filter(a=>!this.isManager(a)); },
     get summaryHtml(){
       const c = this.tasks.reduce((m,t)=>(m[t.status]=(m[t.status]||0)+1,m),{});
       const attn = this.attnNames.length;
