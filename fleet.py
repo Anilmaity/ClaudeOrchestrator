@@ -95,6 +95,24 @@ def load_config(path: Path = CONFIG) -> list[dict]:
     return agents
 
 
+def _set_agent_path(name: str, path: str) -> None:
+    """Set one agent's project_dir in fleet.json (atomic) and refresh AGENTS."""
+    global AGENTS
+    data = json.loads(CONFIG.read_text())
+    found = False
+    for a in data.get("agents", []):
+        if a.get("name") == name:
+            a["project_dir"] = path
+            found = True
+            break
+    if not found:
+        raise ValueError("unknown agent")
+    tmp = CONFIG.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, indent=2))
+    tmp.replace(CONFIG)
+    AGENTS = load_config()
+
+
 # --------------------------------------------------------------------------- #
 # documents
 # --------------------------------------------------------------------------- #
@@ -580,6 +598,26 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"ok": send_message(name, msg)})
             elif u.path == "/api/agent/restart":
                 name = (body.get("name") or "").strip()
+                if orch._window_exists(name):
+                    orch._backend.kill(name)
+                self._json({"ok": True})
+            elif u.path == "/api/agent/path":
+                name = (body.get("name") or "").strip()
+                new_path = (body.get("path") or "").strip()
+                if name not in {a["name"] for a in AGENTS}:
+                    return self._json({"error": "unknown agent"}, 400)
+                if not new_path:
+                    return self._json({"error": "empty path"}, 400)
+                p = Path(new_path).expanduser()
+                if not p.is_dir():
+                    return self._json({"error": "not a directory: " + new_path}, 400)
+                try:
+                    _set_agent_path(name, str(p))
+                except ValueError as e:
+                    return self._json({"error": str(e)}, 400)
+                except OSError:
+                    return self._json({"error": "could not update fleet.json"}, 500)
+                # relaunch the agent so it runs in the new dir (dispatcher respawns it)
                 if orch._window_exists(name):
                     orch._backend.kill(name)
                 self._json({"ok": True})
