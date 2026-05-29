@@ -7,10 +7,13 @@ Acceptance bar for `live`: lift passes Wilson lower bound AND Bonferroni
 correction on sample-N ≥ 1000 resolved bets (or ≥ 30 days) with ≥ 80%
 feature coverage.
 
-| feature                | sample-N | gate                          | gate-WR | baseline-WR | lift   | gross/net P&L            | status                       |
-|------------------------|---------:|-------------------------------|--------:|------------:|-------:|--------------------------|------------------------------|
-| basis_zscore (CB−BN)   | 587      | (any)                         | n/a     | n/a         | n/a    | n/a (feed null in window) | null-needs-bigger-sample     |
-| top_ls_zscore (Binance)|      131 | `top_ls_zscore <= -1`         | 57.3%   | 50.4%       | +6.9pp | not significant @ wave 1 | forward-walk (wave 2 retest) |
+| feature                       | sample-N | gate                          | gate-WR | baseline-WR | lift   | gross/net P&L              | status                       |
+|-------------------------------|---------:|-------------------------------|--------:|------------:|-------:|----------------------------|------------------------------|
+| basis_zscore (CB−BN, wave-1)  |      587 | (any)                         | n/a     | n/a         | n/a    | n/a (feed null in window)  | null-needs-bigger-sample     |
+| top_ls_zscore (Binance, wave-1)|     131 | `top_ls_zscore <= -1`         | 57.3%   | 50.4%       | +6.9pp | not significant @ wave 1   | forward-walk (wave 2 retest) |
+| basis_zscore_extended (C-A)   |    TBD   | `\|basis_z\| >= 1`            | TBD     | TBD         | TBD    | TBD                        | pending (backend in flight)  |
+| top_ls_zscore_forward (C-B)   |    TBD   | `top_ls_zscore <= -1`         | TBD     | TBD         | TBD    | TBD                        | pending (backend in flight)  |
+| cross_coin_lead_lag (C-C)     |    TBD   | TBD (set by backtest)         | TBD     | TBD         | TBD    | TBD                        | pending (backend in flight)  |
 
 ## Notes per row
 
