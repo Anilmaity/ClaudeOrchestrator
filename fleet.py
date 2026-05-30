@@ -114,8 +114,20 @@ def load_config(path: Path = CONFIG) -> list[dict]:
     return agents
 
 
+def _normalize_dashboard_url(url: str) -> str:
+    """Return a safe project dashboard URL or "".
+
+    Only http(s) links are persisted; anything else (empty, junk, or an unsafe
+    scheme like javascript:/ftp:) collapses to "" so the conditional CTA can't
+    produce a broken or unsafe link. Single source of truth for the *_project
+    helpers — handlers stay thin.
+    """
+    u = (url or "").strip()
+    return u if u.startswith(("http://", "https://")) else ""
+
+
 def load_projects(path: Path = CONFIG) -> list[dict]:
-    """Top-level "projects" list, each normalized to {name, path, description}.
+    """Top-level "projects" list, normalized to {name, path, description, dashboard_url}.
 
     Missing key ⇒ []. Validates each project name with orch.NAME_RE and rejects
     duplicates exactly the way load_config() does for agents.
@@ -135,6 +147,7 @@ def load_projects(path: Path = CONFIG) -> list[dict]:
             "name": name,
             "path": p.get("path") or "",
             "description": p.get("description") or "",
+            "dashboard_url": p.get("dashboard_url") or "",
         })
     return projects
 
@@ -271,11 +284,12 @@ def ensure_project_managers() -> list[str]:
         return created
 
 
-def create_project(name: str, path: str = "", description: str = "") -> None:
+def create_project(name: str, path: str = "", description: str = "", dashboard_url: str = "") -> None:
     """Add a project to fleet.json (atomic) and refresh AGENTS.
 
     Raises ValueError("invalid name") / ("project exists") so the handler can
-    map them to 400s.
+    map them to 400s. `dashboard_url` is stored only when it is an http(s) URL
+    (see _normalize_dashboard_url), else "".
     """
     if not orch.NAME_RE.match(name or ""):
         raise ValueError("invalid name")
@@ -287,6 +301,7 @@ def create_project(name: str, path: str = "", description: str = "") -> None:
             "name": name,
             "path": str(Path(path).expanduser()) if path else "",
             "description": description or "",
+            "dashboard_url": _normalize_dashboard_url(dashboard_url),
         })
         if not any(a.get("name") == _pm_name(name) for a in data.get("agents", [])):
             data.setdefault("agents", []).append(_pm_agent(name))
@@ -385,13 +400,15 @@ def rename_project(name: str, new_name: str) -> None:
         _write_config(data)
 
 
-def update_project(name: str, path: str = "", description: str = "") -> None:
-    """Edit a project's path/description in fleet.json. Atomic; refreshes AGENTS.
+def update_project(name: str, path: str = "", description: str = "", dashboard_url: str = "") -> None:
+    """Edit a project's path/description/dashboard_url in fleet.json. Atomic; refreshes AGENTS.
 
     Raises ValueError("unknown project") if `name` is not a project. `path` is
     stored as str(Path(path).expanduser()) when non-empty else "" (matching
-    create_project); an empty `description` clears it. The project name is not
-    changed here (use rename_project for that).
+    create_project); an empty `description` clears it. `dashboard_url` is stored
+    only when it is an http(s) URL (see _normalize_dashboard_url), else "" — so
+    passing an empty/junk value clears it. The project name is not changed here
+    (use rename_project for that).
     """
     with _CONFIG_LOCK:
         data = json.loads(CONFIG.read_text(encoding="utf-8"))
@@ -400,6 +417,7 @@ def update_project(name: str, path: str = "", description: str = "") -> None:
             raise ValueError("unknown project")
         target["path"] = str(Path(path).expanduser()) if path else ""
         target["description"] = description or ""
+        target["dashboard_url"] = _normalize_dashboard_url(dashboard_url)
         _write_config(data)
 
 
@@ -1709,8 +1727,9 @@ class Handler(BaseHTTPRequestHandler):
                 name = (body.get("name") or "").strip()
                 path = (body.get("path") or "").strip()
                 description = (body.get("description") or "").strip()
+                dashboard_url = (body.get("dashboard_url") or "").strip()
                 try:
-                    create_project(name, path, description)
+                    create_project(name, path, description, dashboard_url)
                 except ValueError as e:
                     return self._json({"error": str(e)}, 400)
                 except OSError:
@@ -1769,8 +1788,9 @@ class Handler(BaseHTTPRequestHandler):
                 name = (body.get("name") or "").strip()
                 path = (body.get("path") or "").strip()
                 description = (body.get("description") or "").strip()
+                dashboard_url = (body.get("dashboard_url") or "").strip()
                 try:
-                    update_project(name, path, description)
+                    update_project(name, path, description, dashboard_url)
                 except ValueError as e:
                     return self._json({"error": str(e)}, 400)
                 except OSError:
