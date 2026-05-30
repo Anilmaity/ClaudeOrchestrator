@@ -1240,9 +1240,14 @@
                 <span class="pcount muted" x-text="'· ' + projectMembers(p.name).length + (projectMembers(p.name).length===1 ? ' agent' : ' agents')"></span>
               </div>
               <div class="row-actions proj-actions">
-                <a class="mini ghost" x-show="p.dashboard_url" :href="p.dashboard_url"
-                   target="_blank" rel="noopener noreferrer"
-                   title="Open this project's dashboard in a new tab">↗ dashboard</a>
+                <!-- x-if (not x-show): recreates the node when dashboard_url becomes
+                     truthy on a live /api/state poll, so the CTA appears immediately
+                     instead of only after a full page refresh. -->
+                <template x-if="p.dashboard_url">
+                  <a class="mini ghost" :href="p.dashboard_url"
+                     target="_blank" rel="noopener noreferrer"
+                     title="Open this project's dashboard in a new tab">↗ dashboard</a>
+                </template>
                 <button class="mini ghost" type="button" @click="openGroupTask(p.name)" title="Queue a task to every agent in this project">⊞ task</button>
                 <button class="mini ghost" type="button" @click="openRename(p.name)" title="Rename this project">✎ rename</button>
                 <button class="mini ghost" type="button" @click="openEditProject(p.name)" title="Edit path & description">⚙ edit</button>
