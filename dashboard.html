@@ -717,6 +717,9 @@
                 <span class="gcount" x-text="g.agents.length + (g.agents.length===1 ? ' agent' : ' agents')"></span>
                 <!-- per-group actions: real projects only, never the Ungrouped bucket -->
                 <div class="group-actions" x-show="g.project">
+                  <a class="mini ghost" x-show="projectDashboardUrl(g.project)" :href="projectDashboardUrl(g.project)"
+                     target="_blank" rel="noopener noreferrer"
+                     title="Open this project's dashboard in a new tab">↗ dashboard</a>
                   <button class="mini ghost" type="button" @click="openGroupTask(g.project)" title="Queue a task to every agent in this project">⊞ task group</button>
                   <button class="mini ghost" type="button" @click="openRename(g.project)" title="Rename this project">✎ rename</button>
                   <button class="mini ghost danger" type="button" @click="deleteProject(g.project)" title="Delete this project (its agents are ungrouped, not deleted)">🗑 delete</button>
@@ -1237,6 +1240,9 @@
                 <span class="pcount muted" x-text="'· ' + projectMembers(p.name).length + (projectMembers(p.name).length===1 ? ' agent' : ' agents')"></span>
               </div>
               <div class="row-actions proj-actions">
+                <a class="mini ghost" x-show="p.dashboard_url" :href="p.dashboard_url"
+                   target="_blank" rel="noopener noreferrer"
+                   title="Open this project's dashboard in a new tab">↗ dashboard</a>
                 <button class="mini ghost" type="button" @click="openGroupTask(p.name)" title="Queue a task to every agent in this project">⊞ task</button>
                 <button class="mini ghost" type="button" @click="openRename(p.name)" title="Rename this project">✎ rename</button>
                 <button class="mini ghost" type="button" @click="openEditProject(p.name)" title="Edit path & description">⚙ edit</button>
@@ -1520,6 +1526,9 @@
              placeholder="C:/path/to/project — default dir for new agents">
       <label for="np-desc">Description <span class="muted">(optional)</span></label>
       <textarea id="np-desc" x-model="newProject.description" placeholder="What is this project?"></textarea>
+      <label for="np-dash">Dashboard URL <span class="muted">(optional)</span></label>
+      <input id="np-dash" x-model="newProject.dashboard_url" autocomplete="off"
+             placeholder="http://localhost:PORT — opens via the ↗ dashboard button">
     </div>
     <div class="ft">
       <button class="ghost" type="button" @click="$refs.projectDlg.close()">Cancel</button>
@@ -1650,6 +1659,9 @@
              placeholder="C:/path/to/project — default dir for new agents">
       <label for="ep-desc">Description <span class="muted">(optional)</span></label>
       <textarea id="ep-desc" x-model="editProject.description" placeholder="What is this project?"></textarea>
+      <label for="ep-dash">Dashboard URL <span class="muted">(optional)</span></label>
+      <input id="ep-dash" x-model="editProject.dashboard_url" autocomplete="off"
+             placeholder="http://localhost:PORT — opens via the ↗ dashboard button">
     </div>
     <div class="ft">
       <button class="ghost" type="button" @click="$refs.editProjectDlg.close()">Cancel</button>
@@ -1696,13 +1708,13 @@ function fleet(){
     attnLogs: {},                   // per-agent terminal tail for the Attention tab
     attnTask: {},                   // per-agent task draft for the Attention tab
     // modal-backed forms (projects & groups)
-    newProject: { name:'', path:'', description:'' },
+    newProject: { name:'', path:'', description:'', dashboard_url:'' },
     newAgent: { name:'', role:'', project_dir:'', project:'' },
     groupEdit: { name:'', project:'' },
     groupTask: { project:'', description:'' },   // queue a task to a whole project
     managerTask: { agent:'', description:'' },   // queue a goal to a project's PM agent
     renameProject: { name:'', new_name:'' },
-    editProject: { name:'', path:'', description:'' },   // edit a project's path/description
+    editProject: { name:'', path:'', description:'', dashboard_url:'' },   // edit a project's path/description/dashboard_url
     addExisting: { project:'', name:'' },               // move an existing agent into a project
     composeAgent: '', composeText: '',
     connected: null,                // null=connecting, true, false
@@ -1905,7 +1917,7 @@ function fleet(){
       const known = new Set(this.projects.map(p=>p.name));
       const groups = this.projects.map(p=>({
         project: p.name,
-        meta: { name:p.name, path:p.path||'', description:p.description||'' },
+        meta: { name:p.name, path:p.path||'', description:p.description||'', dashboard_url:p.dashboard_url||'' },
         agents: this.agents.filter(a=>a.project===p.name).slice().sort(cmp),
       }));
       const ungrouped = this.agents.filter(a=>!a.project || !known.has(a.project)).slice().sort(cmp);
@@ -1915,6 +1927,8 @@ function fleet(){
     // Projects-tab helpers: members of a project, agents eligible to join it, and the
     // ungrouped pool (project "" OR referencing a project that no longer exists).
     projectMembers(name){ return this.agents.filter(a=>a.project===name).slice().sort((x,y)=>this._byStatusThenName(x,y)); },
+    // Dashboard-tab group header resolves a project name → its dashboard_url ("" if none/unknown).
+    projectDashboardUrl(name){ const p=this.projects.find(x=>x.name===name); return p ? (p.dashboard_url||'') : ''; },
     // The PM of a project is the agent whose manager_of === name (0 or 1). Returned as an
     // array so an x-for can render the row reactively and skip cards with no PM.
     managerFor(name){ return this.agents.filter(a=>a.manager_of===name); },
@@ -2426,7 +2440,7 @@ function fleet(){
 
     /* ---- projects & groups ---- */
     openNewProject(){
-      this.newProject = { name:'', path:'', description:'' };
+      this.newProject = { name:'', path:'', description:'', dashboard_url:'' };
       this.$refs.projectDlg.showModal();
       this.$nextTick(()=>{ this.$refs.npName && this.$refs.npName.focus(); });
     },
@@ -2434,7 +2448,7 @@ function fleet(){
       const name = this.newProject.name.trim();
       if(!name) return;
       const r = await this.api('/api/projects',{method:'POST',headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({name, path:this.newProject.path.trim(), description:this.newProject.description.trim()})});
+        body: JSON.stringify({name, path:this.newProject.path.trim(), description:this.newProject.description.trim(), dashboard_url:this.newProject.dashboard_url.trim()})});
       if(r.error){ this.toast(r.error,'err'); return; }   // keep the modal open on error
       this.toast('Created project '+name);
       this.$refs.projectDlg.close(); this.refresh();
@@ -2529,15 +2543,15 @@ function fleet(){
 
     /* ---- Projects tab (v3): edit path/desc, add/move/remove members ---- */
     openEditProject(name){
-      const p = this.projects.find(p=>p.name===name) || {name, path:'', description:''};
-      this.editProject = { name:p.name, path:p.path||'', description:p.description||'' };
+      const p = this.projects.find(p=>p.name===name) || {name, path:'', description:'', dashboard_url:''};
+      this.editProject = { name:p.name, path:p.path||'', description:p.description||'', dashboard_url:p.dashboard_url||'' };
       this.$refs.editProjectDlg.showModal();
       this.$nextTick(()=>{ this.$refs.epPath && this.$refs.epPath.focus(); });
     },
     async submitEditProject(){
       const { name } = this.editProject;
       const r = await this.api('/api/projects/update',{method:'POST',headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({name, path:this.editProject.path.trim(), description:this.editProject.description.trim()})});
+        body: JSON.stringify({name, path:this.editProject.path.trim(), description:this.editProject.description.trim(), dashboard_url:this.editProject.dashboard_url.trim()})});
       if(r.error){ this.toast(r.error,'err'); return; }   // keep the modal open on error
       this.toast('Updated project '+name);
       this.$refs.editProjectDlg.close(); this.refresh();
