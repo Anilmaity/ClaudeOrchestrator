@@ -34,3 +34,23 @@ feature coverage.
 - **wave2_new_candidate** — researcher picks from microstructure,
   liquidations, options skew, or cross-asset (deferred to wave 2 researcher
   artifact `btc5m/RESEARCH_WAVE2_CANDIDATES.md`).
+
+## Project Redesign (t-0064) — phase status (2026-05-30)
+
+Whole-project redesign/refactor of the PolyMarketResearch repo into a uv
+monorepo. Tracking detail in `briefs/redesign-progress.md`. **All phases
+COMPLETE** (branch `refactor/monorepo-layout`, 10 commits ahead of
+`feat/btc5m-flow-confluence`; NOT yet merged — merge-to-trunk is the human's call).
+Verified live this session: webapp HTTP 200, `data/live/btc5m.db` actively written.
+
+| phase | result | status |
+|-------|--------|--------|
+| P0 inventory + triage | every module/db/log classified | COMPLETE |
+| P1 layout + stack | uv workspace target tree fixed | COMPLETE |
+| P2 migration plan | 9-step sequenced plan + rollback | COMPLETE |
+| P3 execution (W1/W2/W3) | 357 tests pass, webapp 200, tasks live | COMPLETE |
+| P4 handoff + docs | README/architecture/runbooks shipped | COMPLETE |
+
+Note: code now lives under `apps/btc5m_runner/` (was `btc5m/`), `apps/btc5m_webapp/`,
+`packages/feeds/`; DBs under `data/live/`. The research path refs above
+(`btc5m/RESEARCH_WAVE2_*.md`) are pre-refactor addresses — fix when next touched.
