@@ -76,6 +76,14 @@
   .header h1{font-size:var(--fs-600);font-weight:600;margin:0}
   .header .sub{color:var(--text-dim);font-size:var(--fs-300)}
   .header .needs{color:var(--st-alert);font-weight:600}
+  .header .who{margin-left:auto;display:inline-flex;align-items:center;gap:6px;
+    font-size:var(--fs-300);color:var(--text-dim);padding:4px 10px;border-radius:var(--r-pill);
+    border:1px solid var(--border);background:var(--surface-2)}
+  .header .who [aria-hidden]{color:var(--st-ok);font-size:10px;line-height:1}
+  .header .who .signout{color:var(--text-faint);font-size:var(--fs-200);
+    text-decoration:none;border-left:1px solid var(--border);padding-left:8px;margin-left:2px}
+  .header .who .signout:hover{color:var(--text)}
+  .header .who + .poll{margin-left:0}
   .livedot{width:9px;height:9px;border-radius:50%;background:var(--st-ok);
     box-shadow:0 0 0 4px var(--st-ok-soft);flex:none}
   .livedot.bad{background:var(--st-alert);box-shadow:0 0 0 4px var(--st-alert-soft)}
@@ -92,6 +100,90 @@
   .primary{display:flex;flex-direction:column;gap:var(--sp-4);min-width:0}
   .rail{position:sticky;top:76px;display:flex;flex-direction:column;gap:var(--sp-4)}
   .agents-grid{display:grid;gap:var(--sp-3);grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+
+  /* ---- Project groups ---- */
+  .agent-groups{display:flex;flex-direction:column;gap:var(--sp-5)}
+  .agent-group{display:flex;flex-direction:column;gap:var(--sp-3)}
+  .group-head{display:flex;align-items:baseline;flex-wrap:wrap;gap:var(--sp-2);
+    padding-bottom:6px;border-bottom:1px solid var(--border)}
+  .group-head .gname{font-weight:600;font-size:var(--fs-500);color:var(--text)}
+  .group-head .gpath{font-family:var(--mono);font-size:var(--fs-200);color:var(--text-faint);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40%}
+  .group-head .gcount{margin-left:auto;font-size:var(--fs-200);color:var(--text-faint)}
+  .group-head .group-actions{display:flex;gap:6px;flex-wrap:wrap}
+  .group-head .gdesc{flex-basis:100%;font-size:var(--fs-300);color:var(--text-dim)}
+  .group-empty{color:var(--text-faint);font-size:var(--fs-300);font-style:italic;padding:2px 0}
+
+  /* ---- Projects tab ---- */
+  .proj-cards{display:grid;gap:var(--sp-4);margin-top:var(--sp-2);
+    grid-template-columns:repeat(auto-fill,minmax(360px,1fr))}
+  .proj-card{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);
+    padding:var(--sp-3);display:flex;flex-direction:column;gap:var(--sp-2)}
+  .proj-head{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);flex-wrap:wrap}
+  .proj-head .pname{font-weight:600;font-size:var(--fs-600)}
+  .proj-head .pcount{font-size:var(--fs-200);margin-left:6px}
+  .proj-actions{flex-wrap:wrap}
+  .proj-card .ppath{font-family:var(--mono);font-size:var(--fs-200);color:var(--text-faint);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .proj-card .pdesc{font-size:var(--fs-300);color:var(--text-dim)}
+  .members{display:flex;flex-direction:column;gap:6px;margin-top:var(--sp-1)}
+  .member-empty{font-size:var(--fs-300);font-style:italic;padding:2px 0}
+  .member{display:flex;align-items:center;gap:var(--sp-2);padding:6px 8px;
+    background:var(--inset);border:1px solid var(--border);border-radius:var(--r-sm)}
+  .member .mname{font-weight:600;font-size:var(--fs-400)}
+  .member .mrole{flex:1;min-width:0;font-size:var(--fs-200);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .member .row-actions{flex:none}
+  .member select.assign{width:auto;min-width:160px;flex:none;padding:5px 8px;font-size:var(--fs-300)}
+  .member-add{display:flex;gap:6px;flex-wrap:wrap;margin-top:var(--sp-1)}
+  .ungrouped-list{display:flex;flex-direction:column;gap:6px}
+
+  /* ---- Project state block (per-project task stats + recent history) ---- */
+  .proj-state{display:flex;flex-direction:column;gap:6px;padding:var(--sp-2);
+    background:var(--inset);border:1px solid var(--border);border-radius:var(--r-sm)}
+  .proj-state .pst-head{display:flex;align-items:center;justify-content:space-between;
+    gap:var(--sp-2);flex-wrap:wrap}
+  .proj-state .pst-label{font-size:var(--fs-200);font-weight:600;text-transform:uppercase;
+    letter-spacing:.06em;color:var(--text-faint)}
+  .proj-state .pst-chips{display:flex;flex-wrap:wrap;gap:6px;font-size:var(--fs-200)}
+  .proj-state .pst-chips .chip{padding:1px 6px;border-radius:var(--r-sm);
+    background:var(--surface-1);border:1px solid var(--border)}
+  .proj-state .pst-chips .chip.done{color:var(--ok,#3fb950)}
+  .proj-state .pst-chips .chip.failed{color:var(--err,#f85149)}
+  .proj-state .pst-chips .chip.running{color:var(--accent)}
+  .proj-state .pst-chips .chip.pending{color:var(--text-dim)}
+  .proj-state .pst-current{font-size:var(--fs-300);color:var(--text-dim);
+    display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .proj-state .pst-current .pst-tid{font-family:var(--mono);color:var(--accent)}
+  .proj-state .pst-current .pst-desc{flex:1;min-width:0;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis}
+  .proj-state .pst-recent{display:flex;flex-direction:column;gap:3px;margin-top:2px}
+  .proj-state .pst-row{display:flex;align-items:center;gap:6px;font-size:var(--fs-200)}
+  .proj-state .pst-row .pst-pill{padding:0 5px;border-radius:var(--r-sm);
+    background:var(--surface-1);border:1px solid var(--border);font-family:var(--mono)}
+  .proj-state .pst-row .pst-pill[data-s=done]{color:var(--ok,#3fb950)}
+  .proj-state .pst-row .pst-pill[data-s=failed]{color:var(--err,#f85149)}
+  .proj-state .pst-row .pst-pill[data-s=running]{color:var(--accent)}
+  .proj-state .pst-row .pst-agent{color:var(--text-dim)}
+  .proj-state .pst-row .pst-desc{flex:1;min-width:0;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+  .proj-state .pst-row .pst-when{color:var(--text-faint);font-family:var(--mono)}
+  .proj-state .pst-empty{font-size:var(--fs-200);font-style:italic;color:var(--text-faint)}
+
+  /* ---- Project manager (PM) row + badge ---- */
+  .manager-section{display:flex;flex-direction:column;gap:6px;margin-top:var(--sp-1);
+    padding:var(--sp-2);background:var(--accent-soft);
+    border:1px solid var(--border-strong);border-radius:var(--r-sm)}
+  .manager-label{font-size:var(--fs-200);font-weight:600;text-transform:uppercase;
+    letter-spacing:.06em;color:var(--accent)}
+  .manager-section .member.manager{background:var(--surface-1)}
+  .manager-reply{display:flex;gap:6px}
+  .manager-reply input{font-size:var(--fs-300)}
+  .manager-reply button{flex:none}
+  .pm-tag{display:inline-flex;align-items:center;flex:none;font-size:var(--fs-200);
+    font-weight:600;padding:1px 7px;border-radius:var(--r-pill);letter-spacing:.04em;
+    background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent)}
+  .top .namewrap{display:inline-flex;align-items:center;gap:6px;min-width:0}
 
   @media (max-width:1040px){
     .layout{grid-template-columns:1fr}
@@ -277,6 +369,18 @@
   .cheat dd{margin:0;color:var(--text-dim)}
   .cheat .close-row{margin-top:var(--sp-5);text-align:right}
 
+  /* ---- Form modal (native dialog) ---- */
+  dialog.modal{padding:0;border:1px solid var(--border);border-radius:var(--r-lg);
+    background:var(--surface-1);color:var(--text);width:min(460px,94vw);box-shadow:var(--sh-pop)}
+  dialog.modal::backdrop{background:var(--scrim)}
+  .modal .hd{display:flex;align-items:center;gap:var(--sp-2);padding:12px var(--sp-4);
+    border-bottom:1px solid var(--border)}
+  .modal .hd .title{font-weight:600;font-size:var(--fs-600);margin-right:auto}
+  .modal .bd{padding:0 var(--sp-4) var(--sp-4)}
+  .modal .bd label:first-child{margin-top:var(--sp-4)}
+  .modal .ft{display:flex;justify-content:flex-end;gap:var(--sp-2);
+    padding:12px var(--sp-4);border-top:1px solid var(--border)}
+
   /* ---- Toasts ---- */
   .toasts{position:fixed;right:var(--sp-4);bottom:var(--sp-4);z-index:40;
     display:flex;flex-direction:column;gap:var(--sp-2);max-width:340px}
@@ -293,12 +397,91 @@
   @keyframes shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
   .empty{padding:var(--sp-6);text-align:center;color:var(--text-dim);font-size:var(--fs-400)}
 
+  /* ---- Connectors tab ---- */
+  .conn-dot{width:9px;height:9px;border-radius:50%;background:var(--st-off);
+    display:inline-block;margin-right:4px;flex:none;vertical-align:middle}
+  .conn-dot.on{background:var(--st-ok);box-shadow:0 0 0 2px rgba(63,185,80,.18)}
+  .conn-toggle{display:inline-flex;align-items:center;gap:6px;cursor:pointer;
+    font-size:var(--fs-300);color:var(--text-dim)}
+  .conn-toggle input{accent-color:var(--accent)}
+  .conn-form{display:flex;flex-direction:column;gap:var(--sp-2);margin-top:var(--sp-2)}
+  .conn-fields{display:flex;flex-direction:column;gap:var(--sp-2)}
+  .conn-field{display:flex;flex-direction:column;gap:4px}
+  .conn-label{font-size:var(--fs-200);text-transform:uppercase;letter-spacing:.06em;
+    color:var(--text-faint);font-weight:600}
+  .conn-input{padding:6px 8px;font-size:var(--fs-300);background:var(--inset);
+    border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text)}
+  .conn-input-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .conn-input-row .conn-input{flex:1;min-width:160px}
+  .conn-masked{flex:1;min-width:120px;font-family:var(--mono);font-size:var(--fs-300);
+    color:var(--text-dim);padding:6px 8px;background:var(--inset);
+    border:1px solid var(--border);border-radius:var(--r-sm)}
+  .conn-actions{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;
+    margin-top:var(--sp-1)}
+  .conn-status{font-size:var(--fs-300);font-family:var(--mono);padding:2px 6px;
+    border-radius:var(--r-sm)}
+  .conn-status.ok{color:var(--ok,#3fb950);background:rgba(63,185,80,.10)}
+  .conn-status.err{color:var(--err,#f85149);background:rgba(248,81,73,.10)}
+  .conn-hint{font-size:var(--fs-200);color:var(--text-faint);margin:0}
+  .conn-hint a{color:var(--accent)}
+
   /* ---- Tabs ---- */
   .tabs{display:flex;gap:var(--sp-1);margin:0 0 var(--sp-4);border-bottom:1px solid var(--border)}
   .tab{background:none;border:none;border-bottom:2px solid transparent;border-radius:0;
     color:var(--text-dim);padding:8px 14px;font-size:var(--fs-400);font-weight:600}
   .tab:hover{background:none;color:var(--text)}
   .tab.active{color:var(--text);border-bottom-color:var(--accent)}
+  .tab.hot{color:var(--st-alert)}
+  .tab.hot.active{border-bottom-color:var(--st-alert)}
+  .tab-count{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:var(--r-pill);
+    background:var(--st-alert);color:#fff;font-size:var(--fs-200);font-weight:700;line-height:1.5;
+    box-shadow:0 0 0 3px var(--st-alert-soft)}
+
+  /* ---- Attention tab ---- */
+  .attn-list{display:flex;flex-direction:column;gap:var(--sp-4);padding:var(--sp-3) 0}
+  .attn-row{border:1px solid var(--st-alert-soft);border-left:4px solid var(--st-alert);
+    border-radius:var(--r-md);background:var(--surface-2);padding:var(--sp-3);box-shadow:var(--sh-1)}
+  .attn-head{display:flex;align-items:center;gap:var(--sp-2);margin-bottom:var(--sp-2)}
+  .attn-name{font-weight:700;font-size:var(--fs-500);color:var(--text)}
+  .attn-reason{display:inline-block;padding:2px 10px;border-radius:var(--r-pill);
+    background:var(--st-alert-soft);color:var(--st-alert);font-size:var(--fs-300);font-weight:600}
+  .attn-spacer{flex:1}
+  .attn-tail{margin:0 0 var(--sp-2);max-height:300px;overflow:auto;
+    background:var(--inset);border:1px solid var(--border);border-radius:var(--r-sm);
+    padding:var(--sp-2);font:var(--fs-300)/1.45 var(--mono);color:var(--text-dim);
+    white-space:pre-wrap;word-break:break-word;cursor:text}
+  .attn-tail:focus,
+  .attn-tail.live:focus{outline:none;border-color:var(--accent);
+    box-shadow:0 0 0 3px var(--ring);color:var(--text)}
+  .attn-tail.live{position:relative}
+  .attn-tail.live:focus::after{content:"● typing";position:absolute;top:6px;right:8px;
+    font:var(--fs-200) var(--mono);color:var(--accent);background:var(--accent-soft);
+    padding:1px 8px;border-radius:var(--r-pill);pointer-events:none}
+  .quick-keys{display:flex;flex-wrap:wrap;gap:var(--sp-1);margin:0 0 var(--sp-3)}
+  .quick-keys .qk{font:var(--fs-300) var(--mono);background:var(--surface-3);color:var(--text);
+    border:1px solid var(--border);border-radius:var(--r-sm);padding:3px 9px;cursor:pointer;
+    line-height:1.5;min-width:32px}
+  .quick-keys .qk:hover{border-color:var(--accent);color:var(--accent)}
+  .quick-keys .qk.danger{color:var(--st-alert)}
+  .quick-keys .qk-hint{font:var(--fs-200) var(--font);color:var(--text-faint);
+    padding:3px 6px;align-self:center}
+  .attn-actions{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-3)}
+  @media (max-width: 900px){.attn-actions{grid-template-columns:1fr}}
+  .attn-action{display:flex;flex-direction:column;gap:var(--sp-2)}
+  .attn-action > label{font-size:var(--fs-300);color:var(--text-dim);font-weight:600}
+  .attn-row-input{display:flex;gap:var(--sp-2);align-items:flex-start}
+  .attn-row-input input,
+  .attn-row-input textarea{flex:1;min-width:0;background:var(--inset);color:var(--text);
+    border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px;
+    font:var(--fs-400)/1.45 var(--font)}
+  .attn-row-input textarea{min-height:74px;resize:vertical;font-family:var(--mono);font-size:var(--fs-300)}
+  .attn-hint{font-size:var(--fs-200);color:var(--text-faint)}
+  /* Manager rows: same shell as attention rows but neutral border when idle,
+     so the "needs you" rail stays visually distinct from always-on chat. */
+  .attn-row.mgr-row.idle{border-color:var(--border);border-left-color:var(--accent)}
+  .mgr-tag{display:inline-block;padding:2px 10px;border-radius:var(--r-pill);
+    background:var(--accent-soft);color:var(--accent);font-size:var(--fs-300);font-weight:600;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px}
 
   /* ---- Topology / Connections ---- */
   .topo{display:flex;flex-direction:column;align-items:center;gap:var(--sp-2);padding:var(--sp-2) 0}
@@ -330,6 +513,24 @@
   .flowcount.on{color:var(--accent)}
   .tnode.running{border-left-color:var(--st-busy);box-shadow:0 0 0 1px var(--st-busy) inset}
   .tnode.running .tcur{animation:pulse 1.4s ease-in-out infinite}
+  /* Project columns in the Connections topology: PM at top, workers stacked below. */
+  .topo-projects{display:flex;flex-wrap:wrap;gap:var(--sp-3);justify-content:center;
+    width:100%;align-items:flex-start}
+  .proj-col{display:flex;flex-direction:column;gap:8px;padding:var(--sp-2);
+    border:1px dashed var(--border);border-radius:var(--r-md);
+    min-width:240px;max-width:340px;flex:1 1 240px}
+  .proj-col-head{font-size:var(--fs-200);font-weight:600;text-transform:uppercase;
+    letter-spacing:.06em;color:var(--text-faint);text-align:center}
+  .proj-col-head .pc-empty{color:var(--text-faint);font-style:italic;text-transform:none;
+    letter-spacing:0;font-weight:400}
+  .proj-col-workers{display:flex;flex-direction:column;gap:8px}
+  .tnode.pm{border-left-color:var(--accent);background:var(--accent-soft)}
+  .tnode.pm .pm-tag{font-size:var(--fs-200);padding:0 5px;border-radius:var(--r-sm);
+    background:var(--accent);color:var(--bg);font-weight:700;margin-left:6px}
+  .topo-ungrouped{display:flex;flex-wrap:wrap;gap:var(--sp-3);justify-content:center;
+    width:100%;padding-top:var(--sp-2);border-top:1px dashed var(--border)}
+  .topo-ungrouped .tug-label{font-size:var(--fs-200);font-weight:600;text-transform:uppercase;
+    letter-spacing:.06em;color:var(--text-faint);align-self:center;margin-right:var(--sp-2)}
 
   /* ---- Live stats bar ---- */
   .statbar{display:grid;gap:var(--sp-3);margin:0 0 var(--sp-4);
@@ -351,6 +552,25 @@
   .stat[data-tone="alert"] .v{color:var(--st-alert)}
   .stat[data-tone="alert"] .k .d{width:7px;height:7px;border-radius:50%;background:var(--st-alert);
     animation:pulse 1.2s ease-in-out infinite}
+
+  /* ---- History tab (task-only table with copy buttons) ---- */
+  .history-table{width:100%;border-collapse:collapse;font-size:var(--fs-300)}
+  .history-table th{text-align:left;padding:8px 10px;font-size:var(--fs-200);
+    text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);
+    border-bottom:1px solid var(--border);font-weight:600}
+  .history-table td{padding:10px;border-bottom:1px solid var(--border);vertical-align:top}
+  .history-table tr:hover td{background:var(--inset)}
+  .history-table .hist-when{font-family:var(--mono);font-size:var(--fs-200);white-space:nowrap}
+  .history-table .hist-when .muted{font-size:var(--fs-200)}
+  .history-table .hist-agent{display:flex;align-items:center;gap:8px}
+  .history-table .hist-desc{min-width:0}
+  .history-table .hist-desc-text{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;
+    overflow:hidden;text-overflow:ellipsis;white-space:pre-wrap;word-break:break-word}
+  .history-table .hist-desc .muted{font-size:var(--fs-200);font-family:var(--mono);margin-top:4px}
+  .history-table .hist-actions{white-space:nowrap;text-align:right}
+  .history-table .hist-actions .mini{margin-left:4px}
+  .ava.sm{width:22px;height:22px;border-radius:50%;display:inline-grid;place-items:center;
+    font-size:var(--fs-200);font-weight:600;border:1px solid var(--border);text-transform:uppercase}
 
   /* ---- Activity feed (chat history of tasks given) ---- */
   .feed-controls{display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-2);margin:0 0 var(--sp-4)}
@@ -389,6 +609,11 @@
         aria-label="connection status"></span>
   <h1>Claude Fleet</h1>
   <span class="sub" x-html="summaryHtml" aria-live="polite"></span>
+  <span class="who" x-show="whoami.username" :title="'Signed in as '+whoami.username">
+    <span aria-hidden="true">●</span>
+    <span x-text="whoami.username"></span>
+    <a class="signout" href="/logout" @click="signOut($event)" title="Sign out (clears your browser credentials)">sign out</a>
+  </span>
   <button class="poll" type="button" @click="refresh()"
           title="Seconds since last update — click to refresh now" aria-label="refresh now">⟳ <span x-text="mmss(pollSecs)">0:00</span></button>
 </header>
@@ -399,15 +624,25 @@
   <div class="tabs" role="tablist">
     <button class="tab" type="button" role="tab" :class="{active:tab==='dashboard'}" :aria-selected="tab==='dashboard'" @click="setTab('dashboard')">⊞ Dashboard</button>
     <button class="tab" type="button" role="tab" :class="{active:tab==='activity'}" :aria-selected="tab==='activity'" @click="setTab('activity')">⏱ Activity</button>
+    <button class="tab attn-tab" type="button" role="tab" :class="{active:tab==='attention', hot:attnAgents.length}" :aria-selected="tab==='attention'" @click="setTab('attention')">
+      🔔 Attention<span class="tab-count" x-show="attnAgents.length" x-text="attnAgents.length"></span>
+    </button>
     <button class="tab" type="button" role="tab" :class="{active:tab==='topology'}" :aria-selected="tab==='topology'" @click="setTab('topology')">⛓ Connections</button>
+    <button class="tab" type="button" role="tab" :class="{active:tab==='projects'}" :aria-selected="tab==='projects'" @click="setTab('projects')">🗂 Projects</button>
+    <button class="tab" type="button" role="tab" :class="{active:tab==='connectors'}" :aria-selected="tab==='connectors'" @click="setTab('connectors')">📡 Connectors</button>
+    <button class="tab" type="button" role="tab" :class="{active:tab==='history'}" :aria-selected="tab==='history'" @click="setTab('history')">📜 History</button>
   </div>
 
   <div x-show="tab==='dashboard'">
-  <div class="attention" x-show="attnNames.length || failedTasks.length" aria-live="assertive">
+  <div class="attention" x-show="attnAgents.length || failedTasks.length" aria-live="assertive">
     <span aria-hidden="true">⚠</span>
-    <span x-show="attnNames.length"><strong>Needs you:</strong> <span x-text="attnNames.join(', ')"></span></span>
+    <span x-show="attnAgents.length"><strong>Needs you:</strong>
+      <template x-for="(a, i) in attnAgents" :key="a.name"><span>
+        <span x-text="a.name"></span><span x-show="a.attention_reason"> (<span x-text="a.attention_reason"></span>)</span><span x-show="i < attnAgents.length - 1">, </span>
+      </span></template>
+    </span>
     <span class="chip" x-show="failedTasks.length">✕ <span x-text="failedTasks.length"></span> failed task<span x-text="failedTasks.length>1?'s':''"></span></span>
-    <button class="mini jump" type="button" x-show="attnNames.length" @click="jumpToAttn()">Jump to first ▸</button>
+    <button class="mini jump" type="button" x-show="attnAgents.length" @click="jumpToAttn()">Jump to first ▸</button>
   </div>
 
   <div class="statbar" role="group" aria-label="live fleet stats">
@@ -451,51 +686,83 @@
   <div class="layout">
     <div class="primary">
       <section class="card">
-        <div class="section-head"><h2>Agents</h2></div>
-        <div class="agents-grid">
-          <template x-if="booted && !agents.length">
-            <div class="empty">No agents configured. Edit fleet.json and run ./fleet up.</div>
+        <div class="section-head">
+          <h2>Agents</h2>
+          <div class="row-actions">
+            <button class="mini" type="button" @click="openNewProject()" title="Create a project (a named group of agents)">＋ New project</button>
+            <button class="mini" type="button" @click="openNewAgent()" title="Add a new agent to the fleet">＋ Add agent</button>
+          </div>
+        </div>
+
+        <div class="agents-grid" x-show="!booted" aria-hidden="true">
+          <template x-for="i in 3" :key="i">
+            <div class="agent">
+              <div class="skel" style="height:14px;width:45%"></div>
+              <div class="skel" style="height:10px;width:65%"></div>
+              <div class="skel" style="height:10px;width:85%"></div>
+            </div>
           </template>
-          <template x-if="!booted">
-            <template x-for="i in 3" :key="i">
-              <div class="agent">
-                <div class="skel" style="height:14px;width:45%"></div>
-                <div class="skel" style="height:10px;width:65%"></div>
-                <div class="skel" style="height:10px;width:85%"></div>
+        </div>
+
+        <template x-if="booted && !agents.length">
+          <div class="empty">No agents configured. Add one above, or edit fleet.json.</div>
+        </template>
+
+        <div class="agent-groups" x-show="booted && agents.length">
+          <template x-for="g in groupedAgents" :key="g.project || '__ungrouped__'">
+            <div class="agent-group" x-show="g.project !== '' || g.agents.length">
+              <div class="group-head" x-show="projects.length">
+                <span class="gname" x-text="g.meta.name"></span>
+                <span class="gpath" x-show="g.meta.path" :title="g.meta.path" x-text="g.meta.path"></span>
+                <span class="gcount" x-text="g.agents.length + (g.agents.length===1 ? ' agent' : ' agents')"></span>
+                <!-- per-group actions: real projects only, never the Ungrouped bucket -->
+                <div class="group-actions" x-show="g.project">
+                  <button class="mini ghost" type="button" @click="openGroupTask(g.project)" title="Queue a task to every agent in this project">⊞ task group</button>
+                  <button class="mini ghost" type="button" @click="openRename(g.project)" title="Rename this project">✎ rename</button>
+                  <button class="mini ghost danger" type="button" @click="deleteProject(g.project)" title="Delete this project (its agents are ungrouped, not deleted)">🗑 delete</button>
+                </div>
+                <span class="gdesc" x-show="g.meta.description" x-text="g.meta.description"></span>
               </div>
-            </template>
-          </template>
-          <template x-for="a in sortedAgents" :key="a.name">
-            <div class="agent" :class="{attn:a.attention, offline:a.activity==='offline'}"
-                 :data-s="a.attention ? 'attn' : a.activity" :data-name="a.name">
-              <div class="top">
-                <span class="name" x-text="a.name"></span>
-                <span class="badge" :data-s="a.attention ? 'attn' : a.activity"
-                      :aria-label="'status: ' + (a.attention ? 'needs you' : a.activity)">
-                  <span class="d"></span><span x-text="a.attention ? 'needs you' : a.activity"></span>
-                </span>
+              <div class="agents-grid">
+                <template x-for="a in g.agents" :key="a.name">
+                  <div class="agent" :class="{attn:a.attention, offline:a.activity==='offline'}"
+                       :data-s="a.attention ? 'attn' : a.activity" :data-name="a.name">
+                    <div class="top">
+                      <span class="namewrap">
+                        <span class="name" x-text="a.name"></span>
+                        <span class="pm-tag" x-show="a.manager_of" title="project manager" :aria-label="'project manager of ' + a.manager_of">PM</span>
+                      </span>
+                      <span class="badge" :data-s="a.attention ? 'attn' : a.activity"
+                            :aria-label="'status: ' + (a.attention ? 'needs you' : a.activity)">
+                        <span class="d"></span><span x-text="a.attention ? 'needs you' : a.activity"></span>
+                      </span>
+                    </div>
+                    <div class="role">
+                      <span x-show="a.role" x-text="a.role"></span>
+                      <span x-show="!a.role" class="muted">no role set</span>
+                    </div>
+                    <div class="path" :title="a.project_dir" x-text="a.project_dir"></div>
+                    <div class="cur" x-show="a.current_task">
+                      <span aria-hidden="true">▶</span>
+                      <span class="desc" :title="a.current_desc||''" x-text="(a.current_task||'') + ' · ' + (a.current_desc||'')"></span>
+                      <span class="elapsed" x-show="a.current_started" x-text="(now, '· ' + durSince(a.current_started))"></span>
+                    </div>
+                    <div class="cur-idle" x-show="!a.current_task && a.activity==='idle'">idle · waiting for work</div>
+                    <div class="reply">
+                      <input :aria-label="'message ' + a.name" :placeholder="'message ' + a.name + '…'"
+                             x-model="reply[a.name]" @keydown.enter="sendMsg(a.name)">
+                      <button class="mini" @click="sendMsg(a.name)"
+                              :disabled="a.activity==='offline'" :title="a.activity==='offline' ? 'agent is offline' : ''">Send</button>
+                    </div>
+                    <div class="actions">
+                      <button class="mini ghost" @click="openGroup(a.name, a.project)" title="Move this agent into or out of a project">⊕ group</button>
+                      <button class="mini ghost" @click="assignPath(a.name, a.project_dir)" title="Assign a project path to this agent (it restarts in it)">⧉ path</button>
+                      <button class="mini ghost danger" @click="restart(a.name)">⟲ restart</button>
+                    </div>
+                  </div>
+                </template>
               </div>
-              <div class="role">
-                <span x-show="a.role" x-text="a.role"></span>
-                <span x-show="!a.role" class="muted">no role set</span>
-              </div>
-              <div class="path" :title="a.project_dir" x-text="a.project_dir"></div>
-              <div class="cur" x-show="a.current_task">
-                <span aria-hidden="true">▶</span>
-                <span class="desc" :title="a.current_desc||''" x-text="(a.current_task||'') + ' · ' + (a.current_desc||'')"></span>
-                <span class="elapsed" x-show="a.current_started" x-text="(now, '· ' + durSince(a.current_started))"></span>
-              </div>
-              <div class="cur-idle" x-show="!a.current_task && a.activity==='idle'">idle · waiting for work</div>
-              <div class="reply">
-                <input :aria-label="'message ' + a.name" :placeholder="'message ' + a.name + '…'"
-                       x-model="reply[a.name]" @keydown.enter="sendMsg(a.name)">
-                <button class="mini" @click="sendMsg(a.name)"
-                        :disabled="a.activity==='offline'" :title="a.activity==='offline' ? 'agent is offline' : ''">Send</button>
-              </div>
-              <div class="actions">
-                <button class="mini ghost" @click="assignPath(a.name, a.project_dir)" title="Assign a project path to this agent (it restarts in it)">⧉ path</button>
-                <button class="mini ghost danger" @click="restart(a.name)">⟲ restart</button>
-              </div>
+              <div class="group-empty" x-show="!g.agents.length">No agents in this project yet.</div>
             </div>
           </template>
         </div>
@@ -504,10 +771,10 @@
       <section class="card">
         <div class="section-head"><h2>Tasks</h2></div>
         <table class="tasks">
-          <thead><tr><th>ID</th><th>Agent</th><th>Status</th><th>Time</th><th>Task</th><th></th></tr></thead>
+          <thead><tr><th>ID</th><th>Agent</th><th>Status</th><th>Tries</th><th>Time</th><th>Task</th><th></th></tr></thead>
           <tbody>
             <template x-if="!tasks.length">
-              <tr><td colspan="6"><div class="empty">No tasks yet — queue one from “New task”.</div></td></tr>
+              <tr><td colspan="7"><div class="empty">No tasks yet — queue one from “New task”.</div></td></tr>
             </template>
             <template x-for="t in tasks" :key="t.id">
               <tr :data-s="t.status">
@@ -518,10 +785,16 @@
                     <span :class="t.status==='running' ? 'spin' : ''" aria-hidden="true" x-text="glyph(t.status)"></span><span x-text="t.status"></span>
                   </span>
                 </td>
+                <td data-label="Tries" :title="t.last_error || ''"
+                    x-text="(t.attempts || 0)"></td>
                 <td class="time" data-label="Time" x-text="(now, taskTime(t))"></td>
-                <td class="desc" data-label="Task" :title="t.description" x-text="t.description"></td>
+                <td class="desc" data-label="Task"
+                    :title="(t.last_error ? ('last error: ' + t.last_error + ' — ') : '') + t.description"
+                    x-text="t.description"></td>
                 <td data-label="" class="row-actions">
-                  <button class="mini" @click="taskLog(t.id)">log</button>
+                  <a class="mini" x-show="t.base_sha && t.head_sha"
+                     :href="'#diff/' + encodeURIComponent(t.id)"
+                     :title="'diff range: ' + t.base_sha + '..' + t.head_sha">diff</a>
                   <button class="mini danger" x-show="t.status==='pending'" @click="cancel(t.id)">cancel</button>
                 </td>
               </tr>
@@ -586,6 +859,151 @@
   </div>
   </div><!-- /dashboard tab -->
 
+  <div x-show="tab==='attention'" x-cloak>
+    <section class="card">
+      <div class="section-head">
+        <h2>Needs you — agents blocked on a question</h2>
+        <div class="row-actions">
+          <button class="mini ghost" type="button" @click="refreshAttnLogs()" title="Re-fetch terminal output for every agent below">⟳ refresh logs</button>
+        </div>
+      </div>
+      <template x-if="!attnWorkers.length">
+        <div class="empty">
+          No workers currently need you. When an agent pauses on a prompt
+          (numbered choice, y/n, “waiting for your…”), or emits a line starting
+          with <code>NEEDS-INPUT:</code>, it shows up here.
+        </div>
+      </template>
+
+      <div class="attn-list">
+        <template x-for="a in attnWorkers" :key="a.name">
+          <div class="attn-row">
+            <div class="attn-head">
+              <span class="attn-name" x-text="a.name"></span>
+              <span class="attn-reason" x-show="a.attention_reason" x-text="a.attention_reason"></span>
+              <span class="attn-spacer"></span>
+              <button class="mini ghost" type="button" @click="refreshAttnLog(a.name)" title="Re-fetch this agent's terminal">⟳</button>
+              <button class="mini ghost" type="button" @click="liveLog(a.name)" title="Open full live log">⤢ full log</button>
+            </div>
+
+            <pre class="attn-tail live" tabindex="0"
+                 :aria-label="'live terminal — focus to type into '+a.name"
+                 @keydown="handleTermKey($event, a.name)"
+                 x-text="attnLogs[a.name] || '(loading terminal…)'"></pre>
+            <div class="quick-keys" :aria-label="'quick keys for '+a.name">
+              <span class="qk-hint">Click the terminal above, then type — or tap:</span>
+              <template x-for="k in quickKeys" :key="k.label">
+                <button type="button" class="qk" :class="{danger:k.danger}"
+                        :title="k.title" @click="sendKeys(a.name, k.bytes)" x-text="k.label"></button>
+              </template>
+            </div>
+
+            <div class="attn-actions">
+              <div class="attn-action">
+                <label :for="'attn-reply-'+a.name">Reply (sent as keystrokes to the running agent)</label>
+                <div class="attn-row-input">
+                  <input :id="'attn-reply-'+a.name"
+                         :aria-label="'reply to '+a.name"
+                         :placeholder="'answer '+a.name+'… (Enter to send)'"
+                         x-model="reply[a.name]"
+                         @keydown.enter="sendMsg(a.name)">
+                  <button class="primary" type="button" @click="sendMsg(a.name)"
+                          :disabled="!(reply[a.name]||'').trim()">Send reply</button>
+                </div>
+                <div class="attn-hint">Use this for one-liner answers, “1”, “yes”, or a steering nudge.</div>
+              </div>
+
+              <div class="attn-action">
+                <label :for="'attn-task-'+a.name">Queue a new task (added to <span x-text="a.name"></span>'s queue)</label>
+                <div class="attn-row-input">
+                  <textarea :id="'attn-task-'+a.name"
+                            :aria-label="'queue task for '+a.name"
+                            placeholder="Describe the task… (Ctrl+Enter to queue)"
+                            x-model="attnTask[a.name]"
+                            @keydown.enter="if($event.ctrlKey||$event.metaKey){$event.preventDefault(); queueAttnTask(a.name);}"></textarea>
+                  <button class="primary" type="button" @click="queueAttnTask(a.name)"
+                          :disabled="!(attnTask[a.name]||'').trim()">Queue task</button>
+                </div>
+                <div class="attn-hint">Goes through the dispatcher; runs once the agent is idle.</div>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </section>
+
+    <section class="card" x-show="managers.length" style="margin-top:var(--sp-4)">
+      <div class="section-head">
+        <h2>Managers — always-on chat</h2>
+        <div class="row-actions">
+          <span class="muted" style="font-size:var(--fs-300);color:var(--text-faint)">Project managers and the global orchestrator — message them anytime.</span>
+        </div>
+      </div>
+
+      <div class="attn-list">
+        <template x-for="m in managers" :key="m.name">
+          <div class="attn-row mgr-row" :class="{idle:!m.attention}">
+            <div class="attn-head">
+              <span class="attn-name" x-text="m.name"></span>
+              <span class="mgr-tag" x-text="m.manager_of ? ('PM · ' + m.manager_of) : 'global manager'"></span>
+              <span class="attn-reason" x-show="m.attention" x-text="m.attention_reason || 'needs you'"></span>
+              <span class="badge" :data-s="m.activity" style="margin-left:var(--sp-1)">
+                <span class="d"></span><span x-text="m.activity"></span>
+              </span>
+              <span class="attn-spacer"></span>
+              <button class="mini ghost" type="button" @click="refreshAttnLog(m.name)" title="Re-fetch this agent's terminal">⟳</button>
+              <button class="mini ghost" type="button" @click="liveLog(m.name)" title="Open full live log">⤢ full log</button>
+            </div>
+
+            <pre class="attn-tail live" tabindex="0"
+                 :aria-label="'live terminal — focus to type into '+m.name"
+                 @keydown="handleTermKey($event, m.name)"
+                 x-text="attnLogs[m.name] || '(loading terminal…)'"></pre>
+            <div class="quick-keys" :aria-label="'quick keys for '+m.name">
+              <span class="qk-hint">Click the terminal above, then type — or tap:</span>
+              <template x-for="k in quickKeys" :key="k.label">
+                <button type="button" class="qk" :class="{danger:k.danger}"
+                        :title="k.title" @click="sendKeys(m.name, k.bytes)" x-text="k.label"></button>
+              </template>
+            </div>
+
+            <div class="attn-actions">
+              <div class="attn-action">
+                <label :for="'mgr-reply-'+m.name">Message (sent as keystrokes to <span x-text="m.name"></span>)</label>
+                <div class="attn-row-input">
+                  <input :id="'mgr-reply-'+m.name"
+                         :aria-label="'message '+m.name"
+                         :placeholder="'message '+m.name+'… (Enter to send)'"
+                         x-model="reply[m.name]"
+                         @keydown.enter="sendMsg(m.name)"
+                         :disabled="m.activity==='offline'">
+                  <button class="primary" type="button" @click="sendMsg(m.name)"
+                          :disabled="m.activity==='offline' || !(reply[m.name]||'').trim()"
+                          :title="m.activity==='offline' ? 'agent is offline' : ''">Send</button>
+                </div>
+                <div class="attn-hint">Free-form question, steering note, or answer.</div>
+              </div>
+
+              <div class="attn-action">
+                <label :for="'mgr-task-'+m.name">Queue a task for <span x-text="m.name"></span></label>
+                <div class="attn-row-input">
+                  <textarea :id="'mgr-task-'+m.name"
+                            :aria-label="'queue task for '+m.name"
+                            placeholder="Describe what to do… (Ctrl+Enter to queue)"
+                            x-model="attnTask[m.name]"
+                            @keydown.enter="if($event.ctrlKey||$event.metaKey){$event.preventDefault(); queueAttnTask(m.name);}"></textarea>
+                  <button class="primary" type="button" @click="queueAttnTask(m.name)"
+                          :disabled="!(attnTask[m.name]||'').trim()">Queue task</button>
+                </div>
+                <div class="attn-hint">Goes through the dispatcher; runs once the manager is idle.</div>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </section>
+  </div><!-- /attention tab -->
+
   <div x-show="tab==='activity'" x-cloak>
     <section class="card">
       <div class="section-head">
@@ -639,6 +1057,67 @@
     </section>
   </div><!-- /activity tab -->
 
+  <div x-show="tab==='history'" x-cloak>
+    <section class="card">
+      <div class="section-head">
+        <h2>History — tasks you've queued</h2>
+        <span class="muted" x-text="historyTasks.length + ' task' + (historyTasks.length===1?'':'s')"></span>
+      </div>
+      <div class="feed-controls">
+        <label for="histAgent" style="margin:0">Agent</label>
+        <select id="histAgent" x-model="historyAgent" aria-label="filter history by agent">
+          <option value="">All agents</option>
+          <template x-for="a in agents" :key="a.name"><option :value="a.name" x-text="a.name"></option></template>
+        </select>
+        <input class="search" type="search" x-model="historyQuery" aria-label="search history"
+               placeholder="Search task text…">
+      </div>
+      <template x-if="!historyTasks.length">
+        <div class="empty" x-text="(historyAgent||historyQuery) ? 'Nothing matches this filter.' : 'No tasks given yet — queue one from the Dashboard tab.'"></div>
+      </template>
+      <table class="history-table" x-show="historyTasks.length">
+        <thead>
+          <tr>
+            <th style="width:11.5rem">When</th>
+            <th style="width:11rem">Agent</th>
+            <th style="width:6.5rem">Status</th>
+            <th>Task</th>
+            <th style="width:7rem"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="t in historyTasks" :key="t.id">
+            <tr>
+              <td class="hist-when" :title="absAt(t.created_at)">
+                <div x-text="fmtDateTime(t.created_at)"></div>
+                <div class="muted" x-text="'· ' + (now, relAt(t.created_at))"></div>
+              </td>
+              <td class="hist-agent">
+                <span class="ava sm" :style="'background:'+agentTint(t.agent)+';color:'+agentColor(t.agent)+';border-color:'+agentColor(t.agent)"
+                      :title="t.agent" x-text="(t.agent||'?').slice(0,2)"></span>
+                <span x-text="t.agent"></span>
+              </td>
+              <td>
+                <span class="pill" :data-s="t.status">
+                  <span aria-hidden="true" x-text="glyph(t.status)"></span><span x-text="t.status"></span>
+                </span>
+              </td>
+              <td class="hist-desc">
+                <div class="hist-desc-text" :title="t.description" x-text="t.description"></div>
+                <div class="muted" x-text="t.id + (t.duration_str ? ' · ⏱ ' + t.duration_str : '')"></div>
+              </td>
+              <td class="hist-actions">
+                <button class="mini" type="button" @click="copyTextSnippet(t.description)"
+                        :title="'Copy task ' + t.id + ' description'">📋 Copy</button>
+                <button class="mini ghost" type="button" @click="taskLog(t.id)" title="Show task log">log</button>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </section>
+  </div><!-- /history tab -->
+
   <div x-show="tab==='topology'" x-cloak>
     <section class="card">
       <div class="section-head"><h2>How the fleet is connected</h2></div>
@@ -670,9 +1149,51 @@
           <span class="flowcount" :class="{on: runningCount>0}" x-text="runningCount>0 ? (runningCount + ' running ▾') : 'deliver · oversee'"></span>
           <div class="flowtrack" :class="{on: runningCount>0}"></div>
         </div>
-        <div class="topo-row">
-          <template x-if="!workers.length"><div class="empty">No worker agents.</div></template>
-          <template x-for="w in workers" :key="w.name">
+        <div class="topo-projects">
+          <template x-if="!projects.length && !workers.length">
+            <div class="empty">No projects or worker agents.</div>
+          </template>
+          <!-- One column per project: PM at the top, workers stacked below. A project
+               with no members AND no PM is still rendered so the empty state is visible. -->
+          <template x-for="p in projects" :key="p.name">
+            <div class="proj-col">
+              <div class="proj-col-head" x-text="p.name"></div>
+              <template x-for="pm in managerFor(p.name)" :key="pm.name">
+                <div class="tnode pm" :class="{running: pm.current_task}" :data-s="pm.attention?'attn':pm.activity">
+                  <div class="tname">
+                    <span x-text="pm.name"></span>
+                    <span class="pm-tag" title="project manager">PM</span>
+                    <span class="badge" :data-s="pm.attention?'attn':pm.activity"><span class="d"></span><span x-text="pm.attention?'needs you':pm.activity"></span></span>
+                  </div>
+                  <div class="tdesc">Project manager for <b x-text="p.name"></b> — decomposes goals into worker tasks and unsticks stuck workers in this project.</div>
+                  <div class="tcur" x-show="pm.current_task" :title="pm.current_desc||''" x-text="'▶ ' + (pm.current_task||'') + (pm.current_desc ? ' · ' + pm.current_desc : '')"></div>
+                </div>
+              </template>
+              <template x-if="!managerFor(p.name).length">
+                <div class="proj-col-head"><span class="pc-empty">no PM assigned</span></div>
+              </template>
+              <div class="proj-col-workers">
+                <template x-for="w in workersIn(p.name)" :key="w.name">
+                  <div class="tnode worker" :class="{running: w.current_task}" :data-s="w.attention?'attn':w.activity">
+                    <div class="tname">
+                      <span x-text="w.name"></span>
+                      <span class="badge" :data-s="w.attention?'attn':w.activity"><span class="d"></span><span x-text="w.attention?'needs you':w.activity"></span></span>
+                    </div>
+                    <div class="tdesc" x-text="w.role || 'no role set'"></div>
+                    <div class="tcur" x-show="w.current_task" :title="w.current_desc||''" x-text="'▶ ' + (w.current_task||'') + (w.current_desc ? ' · ' + w.current_desc : '')"></div>
+                  </div>
+                </template>
+                <template x-if="!workersIn(p.name).length">
+                  <div class="proj-col-head"><span class="pc-empty">no workers yet</span></div>
+                </template>
+              </div>
+            </div>
+          </template>
+        </div>
+        <!-- Workers without a project (or pointing at one that no longer exists). -->
+        <div class="topo-ungrouped" x-show="ungroupedTopoWorkers.length">
+          <span class="tug-label">Ungrouped</span>
+          <template x-for="w in ungroupedTopoWorkers" :key="w.name">
             <div class="tnode worker" :class="{running: w.current_task}" :data-s="w.attention?'attn':w.activity">
               <div class="tname">
                 <span x-text="w.name"></span>
@@ -687,12 +1208,271 @@
       <div class="topo-legend">
         Every agent is an independent <b>claude</b> terminal (ConPTY on Windows, tmux elsewhere)
         running in the project directory; the orchestrator talks to each over a localhost control
-        socket. <b>You</b> and the <b>manager</b> both queue tasks; the <b>dispatcher</b> delivers each
-        to whichever agent is idle and tracks it to completion. Agents don't message each other
-        directly — they coordinate through the shared task queue and the manager.
+        socket. <b>You</b> and the global <b>manager</b> queue tasks; each <b>project manager (PM)</b>
+        coordinates only the workers in its own project. The <b>dispatcher</b> delivers each queued
+        task to whichever agent is idle and tracks it to completion. Agents don't message each
+        other directly — they coordinate through the shared task queue and their PM (or the manager).
       </div>
     </section>
   </div>
+
+  <div x-show="tab==='projects'" x-cloak>
+    <section class="card">
+      <div class="section-head">
+        <h2>Projects</h2>
+        <button class="mini primary" type="button" @click="openNewProject()">＋ New project</button>
+      </div>
+
+      <template x-if="!projects.length">
+        <div class="empty">No projects yet. Create one to group agents, queue a task to a whole
+          group, and manage members from here.</div>
+      </template>
+
+      <div class="proj-cards">
+        <template x-for="p in projects" :key="p.name">
+          <div class="proj-card">
+            <div class="proj-head">
+              <div class="proj-title">
+                <span class="pname" x-text="p.name"></span>
+                <span class="pcount muted" x-text="'· ' + projectMembers(p.name).length + (projectMembers(p.name).length===1 ? ' agent' : ' agents')"></span>
+              </div>
+              <div class="row-actions proj-actions">
+                <button class="mini ghost" type="button" @click="openGroupTask(p.name)" title="Queue a task to every agent in this project">⊞ task</button>
+                <button class="mini ghost" type="button" @click="openRename(p.name)" title="Rename this project">✎ rename</button>
+                <button class="mini ghost" type="button" @click="openEditProject(p.name)" title="Edit path & description">⚙ edit</button>
+                <button class="mini ghost danger" type="button" @click="deleteProject(p.name)" title="Delete this project (its agents are ungrouped, not deleted)">🗑 delete</button>
+              </div>
+            </div>
+            <div class="ppath" x-show="p.path" :title="p.path" x-text="p.path"></div>
+            <div class="pdesc" x-show="p.description" x-text="p.description"></div>
+            <div class="pdesc muted" x-show="!p.description">No description.</div>
+
+            <!-- Per-project state: counts, current task, recent history. Hidden if the
+                 project has no agents AND no tasks (nothing meaningful to show yet). -->
+            <template x-if="projectAgentNames(p.name).size">
+              <div class="proj-state">
+                <div class="pst-head">
+                  <span class="pst-label">State</span>
+                  <div class="pst-chips" :aria-label="'task counts for ' + p.name">
+                    <span class="chip done" x-show="projectStats(p.name).done"
+                          x-text="'✓ ' + projectStats(p.name).done + ' done'"></span>
+                    <span class="chip failed" x-show="projectStats(p.name).failed"
+                          x-text="'✕ ' + projectStats(p.name).failed + ' failed'"></span>
+                    <span class="chip running" x-show="projectStats(p.name).running"
+                          x-text="'▶ ' + projectStats(p.name).running + ' running'"></span>
+                    <span class="chip pending" x-show="projectStats(p.name).pending"
+                          x-text="'⏱ ' + projectStats(p.name).pending + ' pending'"></span>
+                    <span class="chip pending" x-show="!projectStats(p.name).done && !projectStats(p.name).failed && !projectStats(p.name).running && !projectStats(p.name).pending">no tasks yet</span>
+                  </div>
+                </div>
+                <template x-for="cur in projectStats(p.name).current" :key="cur.id">
+                  <div class="pst-current" :title="cur.description">
+                    <span>Now:</span>
+                    <span class="pst-tid" x-text="cur.id"></span>
+                    <span x-text="cur.agent"></span>
+                    <span class="pst-desc" x-text="'· ' + (cur.description || '')"></span>
+                    <span x-show="cur.started_at" x-text="'· ' + (now, durSince(cur.started_at))"></span>
+                  </div>
+                </template>
+                <div class="pst-recent">
+                  <template x-for="t in projectRecent(p.name, 5)" :key="t.id">
+                    <div class="pst-row" :title="t.description">
+                      <span class="pst-pill" :data-s="t.status" x-text="t.status"></span>
+                      <span class="pst-agent" x-text="t.agent"></span>
+                      <span class="pst-desc" x-text="t.description"></span>
+                      <span class="pst-when" x-show="t.finished_at || t.created_at"
+                            x-text="(now, durSince(t.finished_at || t.created_at)) + ' ago'"></span>
+                    </div>
+                  </template>
+                  <div class="pst-empty" x-show="!projectRecent(p.name, 5).length">No tasks yet — queue one with ⊞ task.</div>
+                </div>
+              </div>
+            </template>
+
+            <!-- Project manager (manager_of === p.name). PMs have project="" so they are
+                 never worker members; surface the PM only in this dedicated row. -->
+            <template x-for="pm in managerFor(p.name)" :key="pm.name">
+              <div class="manager-section">
+                <div class="manager-label">Project manager</div>
+                <div class="member manager" :data-s="pm.attention ? 'attn' : pm.activity">
+                  <span class="badge" :data-s="pm.attention ? 'attn' : pm.activity"
+                        :aria-label="'status: ' + (pm.attention ? 'needs you' : pm.activity)">
+                    <span class="d"></span><span x-text="pm.attention ? 'needs you' : pm.activity"></span>
+                  </span>
+                  <span class="mname" x-text="pm.name"></span>
+                  <span class="pm-tag" title="project manager">PM</span>
+                  <span class="mrole muted" x-text="pm.role || 'no role set'"></span>
+                  <div class="row-actions">
+                    <button class="mini ghost" type="button" @click="openManagerTask(pm.name)"
+                            title="Queue a task to this project's manager">⊞ task</button>
+                  </div>
+                </div>
+                <div class="reply manager-reply">
+                  <input :aria-label="'message ' + pm.name" :placeholder="'steer ' + pm.name + '…'"
+                         x-model="reply[pm.name]" @keydown.enter="sendMsg(pm.name)">
+                  <button class="mini" type="button" @click="sendMsg(pm.name)"
+                          :disabled="pm.activity==='offline'"
+                          :title="pm.activity==='offline' ? 'manager is offline' : ''">Send</button>
+                </div>
+              </div>
+            </template>
+
+            <div class="members">
+              <template x-if="!projectMembers(p.name).length">
+                <div class="muted member-empty">No member agents yet — add one below.</div>
+              </template>
+              <template x-for="a in projectMembers(p.name)" :key="a.name">
+                <div class="member" :data-s="a.attention ? 'attn' : a.activity">
+                  <span class="badge" :data-s="a.attention ? 'attn' : a.activity"
+                        :aria-label="'status: ' + (a.attention ? 'needs you' : a.activity)">
+                    <span class="d"></span><span x-text="a.attention ? 'needs you' : a.activity"></span>
+                  </span>
+                  <span class="mname" x-text="a.name"></span>
+                  <span class="mrole muted" x-text="a.role || 'no role set'"></span>
+                  <div class="row-actions">
+                    <button class="mini ghost" type="button" @click="openGroup(a.name, a.project)" title="Move to another project">⊕ move</button>
+                    <button class="mini ghost danger" type="button" @click="removeFromProject(a.name)" title="Remove from this project (agent is not deleted)">✕ remove</button>
+                  </div>
+                </div>
+              </template>
+            </div>
+
+            <div class="member-add">
+              <button class="mini" type="button" @click="openAddExisting(p.name)"
+                      :disabled="!agentsNotIn(p.name).length"
+                      :title="agentsNotIn(p.name).length ? 'Move an existing agent into this project' : 'All agents are already in this project'">＋ Add existing agent</button>
+              <button class="mini" type="button" @click="openNewAgentIn(p.name)" title="Create a new agent in this project">＋ New agent here</button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </section>
+
+    <section class="card" x-show="ungroupedAgents.length">
+      <div class="section-head"><h2>Ungrouped agents</h2></div>
+      <div class="ungrouped-list">
+        <template x-for="a in ungroupedAgents" :key="a.name">
+          <div class="member">
+            <span class="badge" :data-s="a.attention ? 'attn' : a.activity"
+                  :aria-label="'status: ' + (a.attention ? 'needs you' : a.activity)">
+              <span class="d"></span><span x-text="a.attention ? 'needs you' : a.activity"></span>
+            </span>
+            <span class="mname" x-text="a.name"></span>
+            <span class="mrole muted" x-text="a.role || 'no role set'"></span>
+            <select class="assign" :aria-label="'assign ' + a.name + ' to a project'"
+                    @change="assignToProject(a.name, $event.target.value); $event.target.value=''"
+                    :disabled="!projects.length">
+              <option value="" x-text="projects.length ? 'Assign to project…' : 'No projects yet'"></option>
+              <template x-for="p in projects" :key="p.name"><option :value="p.name" x-text="p.name"></option></template>
+            </select>
+          </div>
+        </template>
+      </div>
+    </section>
+  </div><!-- /projects tab -->
+
+  <div x-show="tab==='connectors'" x-cloak>
+    <section class="card">
+      <div class="section-head">
+        <h2>Connectors</h2>
+        <button class="mini ghost" type="button" @click="refreshConnectors()" title="Reload">⟳ refresh</button>
+      </div>
+      <p class="empty" style="text-align:left;padding:0 0 var(--sp-3);">
+        Off-platform escalation channels. When a task fails terminally, the
+        orchestrator pings every <b>enabled</b> connector below. Tokens are
+        stored locally in <code>fleet.json</code>; the server masks them on read.
+      </p>
+
+      <div class="proj-cards">
+        <template x-for="name in (connectorOrder.length ? connectorOrder : ['telegram','whatsapp'])" :key="name">
+          <div class="proj-card">
+            <div class="proj-head">
+              <div class="proj-title">
+                <span class="conn-dot" :class="{on: connectors[name] && connectors[name].enabled}" :title="(connectors[name] && connectors[name].enabled)?'enabled':'disabled'"></span>
+                <span class="pname" x-text="connectorLabel(name)"></span>
+                <span class="pcount muted" x-text="(connectors[name] && connectors[name].enabled) ? 'enabled' : 'disabled'"></span>
+              </div>
+              <div class="row-actions proj-actions">
+                <label class="conn-toggle">
+                  <input type="checkbox" :checked="connectors[name] && connectors[name].enabled"
+                         @change="setConnectorEnabled(name, $event.target.checked)"
+                         :aria-label="'Enable '+name">
+                  <span>Enable</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="conn-form" role="group" :aria-label="name+' settings'">
+              <!-- Telegram fields -->
+              <template x-if="name==='telegram'">
+                <div class="conn-fields">
+                  <label class="conn-field">
+                    <span class="conn-label">Bot token</span>
+                    <div class="conn-input-row">
+                      <input type="password" class="conn-input"
+                             x-show="connEdit.telegram.bot_token"
+                             x-model="connDraft.telegram.bot_token"
+                             placeholder="123456:ABC-DEF..." autocomplete="off">
+                      <span class="conn-masked" x-show="!connEdit.telegram.bot_token"
+                            x-text="(connectors.telegram && connectors.telegram.bot_token) || '(not set)'"></span>
+                      <button class="mini ghost" type="button"
+                              @click="toggleConnEdit('telegram','bot_token')"
+                              x-text="connEdit.telegram.bot_token ? 'Done' : 'Edit'"></button>
+                    </div>
+                  </label>
+                  <label class="conn-field">
+                    <span class="conn-label">Chat ID</span>
+                    <input type="text" class="conn-input"
+                           x-model="connDraft.telegram.chat_id"
+                           placeholder="e.g. 123456789 or -100…" autocomplete="off">
+                  </label>
+                </div>
+              </template>
+
+              <!-- WhatsApp (CallMeBot) fields -->
+              <template x-if="name==='whatsapp'">
+                <div class="conn-fields">
+                  <label class="conn-field">
+                    <span class="conn-label">Phone (international, no +)</span>
+                    <input type="text" class="conn-input"
+                           x-model="connDraft.whatsapp.phone"
+                           placeholder="e.g. 919876543210" autocomplete="off">
+                  </label>
+                  <label class="conn-field">
+                    <span class="conn-label">CallMeBot API key</span>
+                    <div class="conn-input-row">
+                      <input type="password" class="conn-input"
+                             x-show="connEdit.whatsapp.apikey"
+                             x-model="connDraft.whatsapp.apikey"
+                             placeholder="123456" autocomplete="off">
+                      <span class="conn-masked" x-show="!connEdit.whatsapp.apikey"
+                            x-text="(connectors.whatsapp && connectors.whatsapp.apikey) || '(not set)'"></span>
+                      <button class="mini ghost" type="button"
+                              @click="toggleConnEdit('whatsapp','apikey')"
+                              x-text="connEdit.whatsapp.apikey ? 'Done' : 'Edit'"></button>
+                    </div>
+                  </label>
+                  <p class="conn-hint">Provider: <a href="https://www.callmebot.com/blog/free-api-whatsapp-messages/" target="_blank" rel="noopener">CallMeBot</a> (no SDK).</p>
+                </div>
+              </template>
+
+              <div class="conn-actions">
+                <button class="mini primary" type="button" @click="saveConnector(name)">Save</button>
+                <button class="mini" type="button" @click="testConnector(name)"
+                        :disabled="!(connectors[name] && connectors[name].enabled)"
+                        :title="(connectors[name] && connectors[name].enabled) ? 'Send a test message' : 'Enable first'">
+                  Send Test
+                </button>
+                <span class="conn-status" x-show="connStatus[name]"
+                      :class="{ok: connStatus[name] && connStatus[name].ok, err: connStatus[name] && !connStatus[name].ok}"
+                      x-text="connStatus[name] ? (connStatus[name].ok ? '✓ '+(connStatus[name].text||'sent') : '✕ '+(connStatus[name].text||'failed')) : ''"></span>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </section>
+  </div><!-- /connectors tab -->
 
   <footer class="foot">Shortcuts: <b>n</b> new task · <b>r</b> refresh · <b>?</b> all shortcuts</footer>
 </div>
@@ -724,6 +1504,183 @@
   <div class="close-row"><button class="mini" type="button" @click="$refs.cheat.close()">Close</button></div>
 </dialog>
 
+<dialog class="modal" x-ref="projectDlg" aria-label="new project"
+        @click="if($event.target===$refs.projectDlg) $refs.projectDlg.close()">
+  <form @submit.prevent="createProject()">
+    <div class="hd">
+      <span class="title">New project</span>
+      <button class="mini" type="button" @click="$refs.projectDlg.close()" title="Close" aria-label="close">✕</button>
+    </div>
+    <div class="bd">
+      <label for="np-name">Name</label>
+      <input id="np-name" x-ref="npName" x-model="newProject.name" required autocomplete="off"
+             placeholder="e.g. core">
+      <label for="np-path">Path <span class="muted">(optional)</span></label>
+      <input id="np-path" x-model="newProject.path" autocomplete="off"
+             placeholder="C:/path/to/project — default dir for new agents">
+      <label for="np-desc">Description <span class="muted">(optional)</span></label>
+      <textarea id="np-desc" x-model="newProject.description" placeholder="What is this project?"></textarea>
+    </div>
+    <div class="ft">
+      <button class="ghost" type="button" @click="$refs.projectDlg.close()">Cancel</button>
+      <button class="primary" type="submit" :disabled="!newProject.name.trim()">Create project</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="modal" x-ref="agentDlg" aria-label="add agent"
+        @click="if($event.target===$refs.agentDlg) $refs.agentDlg.close()">
+  <form @submit.prevent="createAgent()">
+    <div class="hd">
+      <span class="title">Add agent</span>
+      <button class="mini" type="button" @click="$refs.agentDlg.close()" title="Close" aria-label="close">✕</button>
+    </div>
+    <div class="bd">
+      <label for="na-name">Name</label>
+      <input id="na-name" x-ref="naName" x-model="newAgent.name" required autocomplete="off"
+             placeholder="e.g. backend">
+      <label for="na-project">Project</label>
+      <select id="na-project" x-model="newAgent.project" @change="onNewAgentProject()">
+        <option value="">(ungrouped)</option>
+        <template x-for="p in projects" :key="p.name"><option :value="p.name" x-text="p.name"></option></template>
+      </select>
+      <label for="na-dir">Project directory</label>
+      <input id="na-dir" x-model="newAgent.project_dir" required autocomplete="off"
+             placeholder="C:/path/to/code — must exist">
+      <label for="na-role">Role <span class="muted">(optional)</span></label>
+      <textarea id="na-role" x-model="newAgent.role" placeholder="What is this agent responsible for?"></textarea>
+    </div>
+    <div class="ft">
+      <button class="ghost" type="button" @click="$refs.agentDlg.close()">Cancel</button>
+      <button class="primary" type="submit" :disabled="!newAgent.name.trim() || !newAgent.project_dir.trim()">Add agent</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="modal" x-ref="groupDlg" aria-label="move agent to project"
+        @click="if($event.target===$refs.groupDlg) $refs.groupDlg.close()">
+  <form @submit.prevent="saveGroup()">
+    <div class="hd">
+      <span class="title">Move <span x-text="groupEdit.name"></span></span>
+      <button class="mini" type="button" @click="$refs.groupDlg.close()" title="Close" aria-label="close">✕</button>
+    </div>
+    <div class="bd">
+      <label for="ge-project">Project</label>
+      <select id="ge-project" x-ref="geProject" x-model="groupEdit.project">
+        <option value="">(ungrouped)</option>
+        <template x-for="p in projects" :key="p.name"><option :value="p.name" x-text="p.name"></option></template>
+      </select>
+    </div>
+    <div class="ft">
+      <button class="ghost" type="button" @click="$refs.groupDlg.close()">Cancel</button>
+      <button class="primary" type="submit">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="modal" x-ref="groupTaskDlg" aria-label="queue task to project"
+        @click="if($event.target===$refs.groupTaskDlg) $refs.groupTaskDlg.close()">
+  <form @submit.prevent="submitGroupTask()">
+    <div class="hd">
+      <span class="title">Task group · <span x-text="groupTask.project"></span></span>
+      <button class="mini" type="button" @click="$refs.groupTaskDlg.close()" title="Close" aria-label="close">✕</button>
+    </div>
+    <div class="bd">
+      <label for="gt-desc">Task — queued to every agent in this project</label>
+      <textarea id="gt-desc" x-ref="gtDesc" x-model="groupTask.description"
+                @keydown.enter="if($event.ctrlKey||$event.metaKey){$event.preventDefault(); submitGroupTask();}"
+                placeholder="Describe what each agent in this project should do…"></textarea>
+    </div>
+    <div class="ft">
+      <button class="ghost" type="button" @click="$refs.groupTaskDlg.close()">Cancel</button>
+      <button class="primary" type="submit" :disabled="!groupTask.description.trim()">Queue to group<span class="kbd">⌘⏎</span></button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="modal" x-ref="managerTaskDlg" aria-label="queue task to project manager"
+        @click="if($event.target===$refs.managerTaskDlg) $refs.managerTaskDlg.close()">
+  <form @submit.prevent="submitManagerTask()">
+    <div class="hd">
+      <span class="title">Task manager · <span x-text="managerTask.agent"></span></span>
+      <button class="mini" type="button" @click="$refs.managerTaskDlg.close()" title="Close" aria-label="close">✕</button>
+    </div>
+    <div class="bd">
+      <label for="mt-desc">Goal — queued to this project's manager to coordinate</label>
+      <textarea id="mt-desc" x-ref="mtDesc" x-model="managerTask.description"
+                @keydown.enter="if($event.ctrlKey||$event.metaKey){$event.preventDefault(); submitManagerTask();}"
+                placeholder="Describe the goal the manager should decompose and assign to its workers…"></textarea>
+    </div>
+    <div class="ft">
+      <button class="ghost" type="button" @click="$refs.managerTaskDlg.close()">Cancel</button>
+      <button class="primary" type="submit" :disabled="!managerTask.description.trim()">Queue to manager<span class="kbd">⌘⏎</span></button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="modal" x-ref="renameDlg" aria-label="rename project"
+        @click="if($event.target===$refs.renameDlg) $refs.renameDlg.close()">
+  <form @submit.prevent="submitRename()">
+    <div class="hd">
+      <span class="title">Rename <span x-text="renameProject.name"></span></span>
+      <button class="mini" type="button" @click="$refs.renameDlg.close()" title="Close" aria-label="close">✕</button>
+    </div>
+    <div class="bd">
+      <label for="rn-name">New name</label>
+      <input id="rn-name" x-ref="rnName" x-model="renameProject.new_name" required autocomplete="off"
+             placeholder="e.g. core">
+    </div>
+    <div class="ft">
+      <button class="ghost" type="button" @click="$refs.renameDlg.close()">Cancel</button>
+      <button class="primary" type="submit" :disabled="!renameProject.new_name.trim()">Rename</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="modal" x-ref="editProjectDlg" aria-label="edit project"
+        @click="if($event.target===$refs.editProjectDlg) $refs.editProjectDlg.close()">
+  <form @submit.prevent="submitEditProject()">
+    <div class="hd">
+      <span class="title">Edit <span x-text="editProject.name"></span></span>
+      <button class="mini" type="button" @click="$refs.editProjectDlg.close()" title="Close" aria-label="close">✕</button>
+    </div>
+    <div class="bd">
+      <label for="ep-path">Path <span class="muted">(optional)</span></label>
+      <input id="ep-path" x-ref="epPath" x-model="editProject.path" autocomplete="off"
+             placeholder="C:/path/to/project — default dir for new agents">
+      <label for="ep-desc">Description <span class="muted">(optional)</span></label>
+      <textarea id="ep-desc" x-model="editProject.description" placeholder="What is this project?"></textarea>
+    </div>
+    <div class="ft">
+      <button class="ghost" type="button" @click="$refs.editProjectDlg.close()">Cancel</button>
+      <button class="primary" type="submit">Save changes</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="modal" x-ref="addExistingDlg" aria-label="add existing agent to project"
+        @click="if($event.target===$refs.addExistingDlg) $refs.addExistingDlg.close()">
+  <form @submit.prevent="submitAddExisting()">
+    <div class="hd">
+      <span class="title">Add agent to <span x-text="addExisting.project"></span></span>
+      <button class="mini" type="button" @click="$refs.addExistingDlg.close()" title="Close" aria-label="close">✕</button>
+    </div>
+    <div class="bd">
+      <label for="ae-agent">Agent</label>
+      <select id="ae-agent" x-ref="aeSelect" x-model="addExisting.name">
+        <option value="">Select an agent…</option>
+        <template x-for="a in agentsNotIn(addExisting.project)" :key="a.name">
+          <option :value="a.name" x-text="a.name + (a.project ? ' · in ' + a.project : ' · ungrouped')"></option>
+        </template>
+      </select>
+    </div>
+    <div class="ft">
+      <button class="ghost" type="button" @click="$refs.addExistingDlg.close()">Cancel</button>
+      <button class="primary" type="submit" :disabled="!addExisting.name">Add agent</button>
+    </div>
+  </form>
+</dialog>
+
 <div class="toasts" aria-live="polite">
   <template x-for="t in toasts" :key="t.id">
     <div class="toast" :class="t.kind" x-text="t.msg"></div>
@@ -734,36 +1691,76 @@
 function fleet(){
   return {
     /* ---- reactive state ---- */
-    agents: [], tasks: [], docFiles: [], docScope: '__shared__',
+    agents: [], tasks: [], projects: [], docFiles: [], docScope: '__shared__',
     reply: {},                      // per-agent message-box text
+    attnLogs: {},                   // per-agent terminal tail for the Attention tab
+    attnTask: {},                   // per-agent task draft for the Attention tab
+    // modal-backed forms (projects & groups)
+    newProject: { name:'', path:'', description:'' },
+    newAgent: { name:'', role:'', project_dir:'', project:'' },
+    groupEdit: { name:'', project:'' },
+    groupTask: { project:'', description:'' },   // queue a task to a whole project
+    managerTask: { agent:'', description:'' },   // queue a goal to a project's PM agent
+    renameProject: { name:'', new_name:'' },
+    editProject: { name:'', path:'', description:'' },   // edit a project's path/description
+    addExisting: { project:'', name:'' },               // move an existing agent into a project
     composeAgent: '', composeText: '',
     connected: null,                // null=connecting, true, false
     booted: false,
     tab: 'dashboard',
     feedAgent: '', feedQuery: '',    // Activity-tab filters
+    historyAgent: '', historyQuery: '',  // History-tab filters
     localMsgs: [],                   // steering messages sent from this browser (not server-persisted)
     lastPollAt: Date.now(), pollSecs: 0, now: Date.now(),
     dragging: false,
     toasts: [], _toastId: 0,
     log: { title:'Log', text:'…', wrap:false, follow:false, source:null },
     _followTimer: null,
+    whoami: { username: null, enabled: false },
+    // connectors tab state (loaded lazily on first visit)
+    connectors: {}, connectorOrder: [],
+    connDraft: { telegram:{bot_token:'',chat_id:''}, whatsapp:{phone:'',apikey:''} },
+    connEdit: { telegram:{bot_token:false}, whatsapp:{apikey:false} },
+    connStatus: {},   // {name: {ok, text}} after Save / Send Test
 
     /* ---- lifecycle ---- */
     init(){
       const h = location.hash.replace('#','');
       if(h==='connections' || h==='topology') this.tab = 'topology';
       else if(h==='activity') this.tab = 'activity';
+      else if(h==='attention') this.tab = 'attention';
+      else if(h==='projects') this.tab = 'projects';
+      else if(h==='connectors') this.tab = 'connectors';
+      else if(h==='history') this.tab = 'history';
       this.loadMsgs();
+      this.refreshWhoami();
       this.refresh().then(()=>this.refreshDocs());
+      if(this.tab==='connectors') this.refreshConnectors();
       setInterval(()=>this.refresh(), 2500);
+      // Faster terminal refresh while the Attention tab is visible — the user
+      // is interacting key-by-key with a live PTY, so a 1s lag still feels
+      // sluggish. 300 ms gives a fluid feel; the in-flight guard in
+      // refreshAttnLog keeps requests from piling up.
+      setInterval(()=>{
+        if(this.tab !== 'attention') return;
+        if(!this.attnWorkers.length && !this.managers.length) return;
+        this.refreshAttnLogs();
+      }, 300);
       setInterval(()=>{ this.now = Date.now();
         this.pollSecs = Math.max(0, Math.round((Date.now()-this.lastPollAt)/1000)); }, 1000);
       window.addEventListener('keydown', e=>this.onKey(e));
+      // Tab inside a <textarea> should insert/indent, not jump focus. We attach
+      // at the document level (capture phase) so this fires before the browser's
+      // default focus-navigation kicks in, and only acts on textareas — single-
+      // line <input>s keep the normal Tab-to-next-field behavior.
+      document.addEventListener('keydown', e=>this.handleTextareaTab(e), true);
     },
     setTab(t){
       this.tab = t;
-      const h = t==='topology' ? '#connections' : (t==='activity' ? '#activity' : '');
+      const h = t==='topology' ? '#connections' : (t==='activity' ? '#activity' : (t==='attention' ? '#attention' : (t==='projects' ? '#projects' : (t==='connectors' ? '#connectors' : (t==='history' ? '#history' : '')))));
       history.replaceState(null, '', h || location.pathname + location.search);
+      if(t==='connectors') this.refreshConnectors();
+      if(t==='attention') this.refreshAttnLogs();
     },
 
     /* ---- helpers ---- */
@@ -779,6 +1776,54 @@ function fleet(){
       const h = Math.floor(m/60); return h+'h '+(m%60)+'m';
     },
     durSince(iso){ return this.dur(iso, null); },
+    // Tab handling for multi-line textareas. Indents the current line / selection
+    // with a literal \t (Shift+Tab outdents one leading tab or up to two spaces).
+    // For a multi-line selection every covered line is indented/outdented; the
+    // selection is preserved so chained Tab presses keep building indent. We
+    // dispatch a synthetic 'input' event so Alpine's x-model picks up the change.
+    handleTextareaTab(ev){
+      if(ev.key !== 'Tab') return;
+      const ta = ev.target;
+      if(!ta || ta.tagName !== 'TEXTAREA') return;
+      ev.preventDefault();
+      const v = ta.value;
+      const s = ta.selectionStart, e = ta.selectionEnd;
+      const lineStart = v.lastIndexOf('\n', s-1) + 1;
+      const multiline = v.slice(s, e).includes('\n');
+      if(ev.shiftKey){
+        if(multiline){
+          const seg = v.slice(lineStart, e);
+          const out = seg.replace(/^(\t| {1,2})/gm, '');
+          const removed = seg.length - out.length;
+          if(!removed) return;
+          ta.value = v.slice(0, lineStart) + out + v.slice(e);
+          const firstStrip = (seg.match(/^(\t| {1,2})/) || [''])[0].length;
+          ta.selectionStart = Math.max(lineStart, s - firstStrip);
+          ta.selectionEnd = e - removed;
+        } else {
+          const line = v.slice(lineStart, e);
+          const m = line.match(/^(\t| {1,2})/);
+          if(!m) return;
+          const d = m[0].length;
+          ta.value = v.slice(0, lineStart) + line.slice(d) + v.slice(e);
+          ta.selectionStart = Math.max(lineStart, s - d);
+          ta.selectionEnd = e - d;
+        }
+      } else {
+        if(multiline){
+          const seg = v.slice(lineStart, e);
+          const inserted = seg.replace(/^/gm, '\t');
+          const added = inserted.length - seg.length;
+          ta.value = v.slice(0, lineStart) + inserted + v.slice(e);
+          ta.selectionStart = s + 1;
+          ta.selectionEnd = e + added;
+        } else {
+          ta.value = v.slice(0, s) + '\t' + v.slice(e);
+          ta.selectionStart = ta.selectionEnd = s + 1;
+        }
+      }
+      ta.dispatchEvent(new Event('input', {bubbles:true}));
+    },
     taskTime(t){
       if(t.status==='running') return t.started_at ? this.dur(t.started_at, null) : '—';
       if(t.finished_at && (t.started_at||t.created_at)) return this.dur(t.started_at||t.created_at, t.finished_at);
@@ -801,6 +1846,31 @@ function fleet(){
       const d = Math.round(h/24); return d+(d>1?' days ago':' day ago');
     },
     absAt(iso){ return iso ? new Date(iso).toLocaleString() : ''; },
+    // History tab: compact "2026-05-29 11:42" form (24h, local zone). Avoids
+    // the locale tooltip's longer "5/29/2026, 11:42:30 AM" so the column stays
+    // narrow.
+    fmtDateTime(iso){
+      if(!iso) return '';
+      const d = new Date(iso);
+      const p = n=>String(n).padStart(2,'0');
+      return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())
+        +' '+p(d.getHours())+':'+p(d.getMinutes());
+    },
+    copyTextSnippet(text){
+      const s = String(text||'');
+      if(!s) return this.toast('Nothing to copy','err');
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(s).then(()=>this.toast('Copied to clipboard')).catch(()=>this.toast('Copy failed','err'));
+      } else {
+        // Fallback for non-HTTPS / older browsers: hidden textarea + execCommand.
+        const ta = document.createElement('textarea');
+        ta.value = s; ta.style.position='fixed'; ta.style.left='-10000px';
+        document.body.appendChild(ta); ta.select();
+        try{ document.execCommand('copy'); this.toast('Copied to clipboard'); }
+        catch(e){ this.toast('Copy failed','err'); }
+        finally{ document.body.removeChild(ta); }
+      }
+    },
     dayLabel(iso){
       const d = new Date(iso), t = new Date();
       const same = (a,b)=> a.toDateString()===b.toDateString();
@@ -822,16 +1892,113 @@ function fleet(){
     },
 
     /* ---- derived views ---- */
+    // within-group ordering: attn → busy → idle → offline, then name
+    agentRank(a){ return ({attn:0,busy:1,idle:2,offline:3})[a.attention?'attn':a.activity] ?? 9; },
+    _byStatusThenName(x,y){ return this.agentRank(x)-this.agentRank(y) || String(x.name).localeCompare(String(y.name)); },
     get sortedAgents(){
-      const rank = a => ({attn:0,busy:1,idle:2,offline:3})[a.attention?'attn':a.activity] ?? 9;
-      return this.agents.slice().sort((x,y)=> rank(x)-rank(y) || String(x.name).localeCompare(String(y.name)));
+      return this.agents.slice().sort((x,y)=>this._byStatusThenName(x,y));
+    },
+    // agents grouped under their project, then an "Ungrouped" bucket. Agents whose
+    // project is "" or references a project that no longer exists fall into Ungrouped.
+    get groupedAgents(){
+      const cmp = (x,y)=>this._byStatusThenName(x,y);
+      const known = new Set(this.projects.map(p=>p.name));
+      const groups = this.projects.map(p=>({
+        project: p.name,
+        meta: { name:p.name, path:p.path||'', description:p.description||'' },
+        agents: this.agents.filter(a=>a.project===p.name).slice().sort(cmp),
+      }));
+      const ungrouped = this.agents.filter(a=>!a.project || !known.has(a.project)).slice().sort(cmp);
+      groups.push({ project:'', meta:{name:'Ungrouped', path:'', description:''}, agents:ungrouped });
+      return groups;
+    },
+    // Projects-tab helpers: members of a project, agents eligible to join it, and the
+    // ungrouped pool (project "" OR referencing a project that no longer exists).
+    projectMembers(name){ return this.agents.filter(a=>a.project===name).slice().sort((x,y)=>this._byStatusThenName(x,y)); },
+    // The PM of a project is the agent whose manager_of === name (0 or 1). Returned as an
+    // array so an x-for can render the row reactively and skip cards with no PM.
+    managerFor(name){ return this.agents.filter(a=>a.manager_of===name); },
+    projectManager(name){ return this.agents.find(a=>a.manager_of===name) || null; },
+    // PMs aren't worker members and shouldn't be offered as ones to add to a project.
+    agentsNotIn(name){ return this.agents.filter(a=>a.project!==name && !a.manager_of).slice().sort((x,y)=>String(x.name).localeCompare(String(y.name))); },
+    // Per-project task views: the project owns its members + its PM (manager_of===name).
+    // Tasks are linked to projects through their agent. /api/state caps tasks at the most
+    // recent 200, so very old history is intentionally truncated.
+    projectAgentNames(name){
+      const s = new Set();
+      for(const a of this.agents){ if(a.project===name || a.manager_of===name) s.add(a.name); }
+      return s;
+    },
+    projectTasks(name){
+      const owned = this.projectAgentNames(name);
+      return this.tasks.filter(t=>owned.has(t.agent));
+    },
+    projectStats(name){
+      const ts = this.projectTasks(name);
+      const by = s => ts.filter(t=>t.status===s).length;
+      return {
+        done: by('done'), failed: by('failed'),
+        running: by('running'), pending: by('pending'),
+        current: ts.filter(t=>t.status==='running'),
+      };
+    },
+    projectRecent(name, n){
+      // /api/state already returns tasks newest-first; show the top n that have moved
+      // past pending so the row reflects real history, not just freshly queued items.
+      return this.projectTasks(name)
+        .filter(t=>t.status!=='pending')
+        .slice(0, n);
+    },
+    get ungroupedAgents(){
+      const known = new Set(this.projects.map(p=>p.name));
+      // PMs (manager_of set) are surfaced in their project's manager row, not here.
+      return this.agents.filter(a=>!a.manager_of && (!a.project || !known.has(a.project))).slice().sort((x,y)=>this._byStatusThenName(x,y));
     },
     get attnNames(){ return this.agents.filter(a=>a.attention).map(a=>a.name); },
+    // Same set as attnNames but carrying the human-readable attention_reason
+    // (T-05) so the attention bar can show "alice (no heartbeat for 12m), bob".
+    get attnAgents(){ return this.agents.filter(a=>a.attention).map(a=>({name:a.name, attention_reason:a.attention_reason||""})); },
+    // Attention tab splits flagged agents from the always-on Managers section
+    // so a flagged PM only appears once (in Managers, with its needs-you
+    // badge), and the "Needs you" rail at top stays scoped to workers.
+    get attnWorkers(){
+      return this.agents
+        .filter(a => a.attention && !a.manager_of && !this.isManager(a))
+        .map(a => ({name:a.name, attention_reason:a.attention_reason||""}));
+    },
+    // Always-on chat targets: every project PM (manager_of set) plus the
+    // global manager (orch / role contains "manager"). Sorted PMs first, then
+    // the global manager, so a multi-project user sees their PMs grouped.
+    get managers(){
+      return this.agents
+        .filter(a => a.manager_of || this.isManager(a))
+        .slice()
+        .sort((x,y) => {
+          const xp = x.manager_of ? 0 : 1, yp = y.manager_of ? 0 : 1;
+          if(xp !== yp) return xp - yp;
+          return (x.manager_of||x.name).localeCompare(y.manager_of||y.name);
+        });
+    },
     get failedTasks(){ return this.tasks.filter(t=>t.status==='failed'); },
     // The manager is whichever agent has a coordinator role (or is named 'orch').
     isManager(a){ return (a.role||'').toLowerCase().includes('manager') || a.name==='orch'; },
     get manager(){ return this.agents.find(a=>this.isManager(a)) || null; },
     get workers(){ return this.agents.filter(a=>!this.isManager(a)); },
+    // Connections-tab grouping: workers in a project = agents with project===name,
+    // excluding the PM (it gets its own slot) and the global manager.
+    workersIn(name){
+      return this.agents
+        .filter(a=>a.project===name && !a.manager_of && !this.isManager(a))
+        .slice().sort((x,y)=>this._byStatusThenName(x,y));
+    },
+    // Workers with no project or a project that no longer exists. PMs and the global
+    // manager are surfaced elsewhere (their own project column / the top manager node).
+    get ungroupedTopoWorkers(){
+      const known = new Set(this.projects.map(p=>p.name));
+      return this.agents
+        .filter(a=>!a.manager_of && !this.isManager(a) && (!a.project || !known.has(a.project)))
+        .slice().sort((x,y)=>this._byStatusThenName(x,y));
+    },
     get pendingCount(){ return this.tasks.filter(t=>t.status==='pending').length; },
     get runningCount(){ return this.tasks.filter(t=>t.status==='running').length; },
     // live aggregate stats for the stats bar (derived from /api/state each poll)
@@ -880,6 +2047,17 @@ function fleet(){
       }
       return groups;
     },
+    // History tab: flat list of TASKS only (no steering messages), newest first,
+    // filtered by historyAgent / historyQuery. Each row carries a precomputed
+    // duration string so the template stays read-only.
+    get historyTasks(){
+      let ts = this.tasks.slice();
+      if(this.historyAgent) ts = ts.filter(t=>t.agent===this.historyAgent);
+      const q = (this.historyQuery||'').trim().toLowerCase();
+      if(q) ts = ts.filter(t=>((t.description||'')+' '+(t.agent||'')+' '+(t.id||'')).toLowerCase().includes(q));
+      ts.sort((x,y)=>(Date.parse(y.created_at)||0)-(Date.parse(x.created_at)||0));
+      return ts.map(t=>({...t, duration_str: this.taskTime(t)}));
+    },
     get summaryHtml(){
       const c = this.tasks.reduce((m,t)=>(m[t.status]=(m[t.status]||0)+1,m),{});
       const attn = this.attnNames.length;
@@ -896,9 +2074,133 @@ function fleet(){
         this.lastPollAt = Date.now();
         this.agents = s.agents || [];
         this.tasks = s.tasks || [];
+        this.projects = s.projects || [];
         this.connected = true;
         this.booted = true;
+        // Keep the Attention tab's terminal tails fresh on the same cadence as
+        // /api/state — only when the tab is actually visible to avoid wasting
+        // /api/logs calls when nobody is reading them. Triggers whenever there
+        // are workers needing attention OR managers (always-on chat) to refresh.
+        if(this.tab==='attention' && (this.attnWorkers.length || this.managers.length)) this.refreshAttnLogs();
       }catch(e){ this.connected = false; }
+    },
+
+    /* ---- auth ---- */
+    async refreshWhoami(){
+      try{
+        const r = await this.api('/api/whoami');
+        this.whoami = { username: r.username || null, enabled: !!r.enabled };
+      }catch(e){ this.whoami = { username: null, enabled: false }; }
+    },
+    signOut(ev){
+      ev.preventDefault();
+      // GET /logout returns 401 with a DIFFERENT realm so the browser
+      // invalidates the cached Basic credentials for THIS realm. Then bounce
+      // back to /, which will challenge for a fresh login.
+      fetch('/logout', {credentials: 'include'}).finally(()=>{
+        window.location.replace('/');
+      });
+    },
+
+    /* ---- connectors ---- */
+    connectorLabel(name){ return ({telegram:'Telegram', whatsapp:'WhatsApp'})[name] || name; },
+    toggleConnEdit(name, field){
+      this.connEdit[name][field] = !this.connEdit[name][field];
+      // entering edit mode clears the draft so a stale masked value isn't
+      // re-saved by mistake; leaving edit mode keeps the typed value.
+      if(this.connEdit[name][field]) this.connDraft[name][field] = '';
+    },
+    async refreshConnectors(){
+      try{
+        const r = await this.api('/api/connectors');
+        const c = r.connectors || {};
+        this.connectors = c;
+        this.connectorOrder = r.supported || Object.keys(c);
+        // seed the draft with any non-secret fields so the user sees their
+        // saved chat_id / phone; secrets stay blank until they hit Edit.
+        for(const name of this.connectorOrder){
+          const cfg = c[name] || {};
+          if(name==='telegram'){
+            this.connDraft.telegram.chat_id = cfg.chat_id || '';
+            // do not seed bot_token: it's masked
+          }else if(name==='whatsapp'){
+            this.connDraft.whatsapp.phone = cfg.phone || '';
+          }
+        }
+      }catch(e){ /* leave existing state */ }
+    },
+    async setConnectorEnabled(name, on){
+      // Just toggling the switch saves the enable bit; if the user is turning
+      // it on without credentials the server rejects with 400 and we restore.
+      const payload = { enabled: !!on };
+      // include any current draft fields so a half-typed secret isn't dropped
+      Object.assign(payload, this._draftPayload(name));
+      try{
+        const r = await this.api('/api/connectors/'+encodeURIComponent(name),
+          {method:'PUT', headers:{'Content-Type':'application/json'},
+           body: JSON.stringify(payload)});
+        if(r.error){
+          this.toast(r.error,'err');
+          this.connStatus[name] = {ok:false, text:r.error};
+          return;
+        }
+        this.connectors[name] = r.connector;
+        this.toast(name+' '+(on?'enabled':'disabled'));
+      }catch(e){
+        this.toast('Could not update '+name,'err');
+      }
+    },
+    _draftPayload(name){
+      // Only send fields the user actually set so we don't overwrite stored
+      // secrets with empty strings.
+      const d = this.connDraft[name] || {};
+      const out = {};
+      for(const k of Object.keys(d)){
+        const v = d[k];
+        if(v !== '' && v != null) out[k] = v;
+      }
+      return out;
+    },
+    async saveConnector(name){
+      const payload = this._draftPayload(name);
+      // preserve current enable state unless we're explicitly toggling
+      if(this.connectors[name]) payload.enabled = !!this.connectors[name].enabled;
+      try{
+        const r = await this.api('/api/connectors/'+encodeURIComponent(name),
+          {method:'PUT', headers:{'Content-Type':'application/json'},
+           body: JSON.stringify(payload)});
+        if(r.error){
+          this.connStatus[name] = {ok:false, text:r.error};
+          this.toast(r.error,'err'); return;
+        }
+        this.connectors[name] = r.connector;
+        this.connStatus[name] = {ok:true, text:'saved'};
+        this.toast('Saved '+name);
+        // close the secret editors so the masked value re-renders
+        for(const k of Object.keys(this.connEdit[name]||{})) this.connEdit[name][k] = false;
+        // clear typed secret out of memory; non-secret fields keep their draft
+        if(name==='telegram') this.connDraft.telegram.bot_token = '';
+        if(name==='whatsapp') this.connDraft.whatsapp.apikey = '';
+      }catch(e){
+        this.connStatus[name] = {ok:false, text:'network error'};
+        this.toast('Save failed','err');
+      }
+    },
+    async testConnector(name){
+      try{
+        const r = await this.api('/api/connectors/'+encodeURIComponent(name)+'/test',
+          {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
+        if(r.ok){
+          this.connStatus[name] = {ok:true, text:'sent'};
+          this.toast('Sent test via '+name);
+        }else{
+          this.connStatus[name] = {ok:false, text:(r.error||'failed')};
+          this.toast(name+' test failed: '+(r.error||'unknown'),'err');
+        }
+      }catch(e){
+        this.connStatus[name] = {ok:false, text:'network error'};
+        this.toast('Test failed','err');
+      }
     },
 
     /* ---- documents ---- */
@@ -956,7 +2258,119 @@ function fleet(){
         body: JSON.stringify({name, message})});
       if(r.error){ this.toast(r.error,'err'); return; }
       this.recordMsg(name, message);
-      this.reply[name] = ''; this.toast('Sent to '+name); this.refresh();
+      this.reply[name] = ''; this.toast('Sent to '+name);
+      // When the user just answered a prompt from the Attention tab, the
+      // freshest terminal tail should reflect their input — refresh it so the
+      // row updates without waiting for the next 2.5s poll.
+      if(this.tab==='attention') this.refreshAttnLog(name);
+      this.refresh();
+    },
+
+    /* ---- Attention tab ---- */
+    // Quick-key palette under each terminal: lets the user trigger common
+    // responses without focusing the pre. Bytes are the literal escape
+    // sequences sent over /api/agent/keys.
+    quickKeys: Object.freeze([
+      {label:'↵ Enter', bytes:'\r', title:'Send Enter'},
+      {label:'Esc',     bytes:'\x1b', title:'Send Escape'},
+      {label:'1',       bytes:'1',  title:'Send "1"'},
+      {label:'2',       bytes:'2',  title:'Send "2"'},
+      {label:'y',       bytes:'y',  title:'Send "y"'},
+      {label:'n',       bytes:'n',  title:'Send "n"'},
+      {label:'↑',       bytes:'\x1b[A', title:'Arrow up'},
+      {label:'↓',       bytes:'\x1b[B', title:'Arrow down'},
+      {label:'←',       bytes:'\x1b[D', title:'Arrow left'},
+      {label:'→',       bytes:'\x1b[C', title:'Arrow right'},
+      {label:'Ctrl+C',  bytes:'\x03', title:'Send SIGINT-style interrupt to the TUI', danger:true},
+    ]),
+
+    // Map a keyboard event to the bytes the agent's PTY expects. Returns null
+    // for events we don't handle, so the browser keeps its default for
+    // shortcuts like F5 / Ctrl+T / browser navigation.
+    keyToBytes(ev){
+      // Ctrl+letter → control byte 0x01..0x1A (Ctrl+C, Ctrl+D, …).
+      if(ev.ctrlKey && !ev.altKey && !ev.metaKey && ev.key && ev.key.length === 1){
+        const c = ev.key.toLowerCase().charCodeAt(0);
+        if(c >= 97 && c <= 122) return String.fromCharCode(c - 96);
+      }
+      const map = {
+        'Enter': '\r', 'Backspace': '\x7f', 'Tab': '\t', 'Escape': '\x1b',
+        'ArrowUp': '\x1b[A', 'ArrowDown': '\x1b[B',
+        'ArrowRight': '\x1b[C', 'ArrowLeft': '\x1b[D',
+        'Home': '\x1b[H', 'End': '\x1b[F',
+        'Delete': '\x1b[3~', 'PageUp': '\x1b[5~', 'PageDown': '\x1b[6~',
+      };
+      if(map[ev.key]) return map[ev.key];
+      // Single printable char (no modifier combos except Shift) — letters,
+      // digits, punctuation, space.
+      if(ev.key && ev.key.length === 1 && !ev.ctrlKey && !ev.metaKey && !ev.altKey) return ev.key;
+      return null;
+    },
+    handleTermKey(ev, name){
+      const bytes = this.keyToBytes(ev);
+      if(bytes == null) return;            // unhandled → let browser default run
+      ev.preventDefault();
+      this.sendKeys(name, bytes);
+    },
+    // Base64-encode the UTF-8 bytes (handles any printable char + the
+    // hard-coded VT escapes) and POST them to the worker's PTY. After each
+    // burst we re-pull the terminal so the user sees their input reflected
+    // without waiting for the next 1s poll tick.
+    async sendKeys(name, bytesString){
+      if(!bytesString) return;
+      let b64;
+      try{ b64 = btoa(unescape(encodeURIComponent(bytesString))); }
+      catch(e){ return; }
+      try{
+        const r = await this.api('/api/agent/keys',{method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({name, keys_b64: b64})});
+        if(r && r.error){ this.toast(r.error,'err'); return; }
+        this.refreshAttnLog(name);
+      }catch(e){ this.toast('keys send failed','err'); }
+    },
+
+    // In-flight /api/logs requests, keyed by agent name. Without this the
+    // 300 ms poll + every-keystroke refresh would let requests pile up and
+    // arrive out of order, making the terminal flicker between an old and
+    // new screen. Skip whenever a fetch is already mid-flight.
+    _attnInflight: new Set(),
+    // Pull last ~80 lines of an agent's terminal so the operator can read the
+    // question / suggestion in context before answering or queueing a task.
+    async refreshAttnLog(name){
+      if(this._attnInflight.has(name)) return;
+      this._attnInflight.add(name);
+      try{
+        const r = await this.api('/api/logs?agent='+encodeURIComponent(name)+'&lines=80');
+        const txt = (r && r.text) || '(empty)';
+        // Only assign when the content actually changes — Alpine still
+        // re-renders identical strings, so the pre's scroll position would
+        // jump every tick. Comparing first keeps the cursor where the
+        // operator is reading.
+        if(this.attnLogs[name] !== txt) this.attnLogs[name] = txt;
+      }catch(e){ this.attnLogs[name] = '(failed to fetch terminal)'; }
+      finally{ this._attnInflight.delete(name); }
+    },
+    async refreshAttnLogs(){
+      // Workers needing attention + every manager (always-on chat). Deduped so
+      // a flagged PM doesn't get its terminal fetched twice per poll.
+      const names = new Set();
+      for(const a of this.attnWorkers) names.add(a.name);
+      for(const m of this.managers) names.add(m.name);
+      await Promise.all([...names].map(n=>this.refreshAttnLog(n)));
+    },
+    // Queue a brand-new task for an agent from the Attention tab. Same endpoint
+    // as the sidebar composer — keeping a single server entry point means there
+    // is exactly one path through validation, rate-limiting, and dispatch.
+    async queueAttnTask(name){
+      const description = (this.attnTask[name]||'').trim();
+      if(!description) return;
+      const r = await this.api('/api/tasks',{method:'POST',headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({agent:name, description})});
+      if(r.error){ this.toast(r.error,'err'); return; }
+      this.attnTask[name] = '';
+      this.toast('Queued '+(r.id||'task')+' → '+name);
+      this.refresh();
     },
 
     /* ---- local message history (steering messages aren't server-persisted) ---- */
@@ -1009,6 +2423,160 @@ function fleet(){
       if(r.error){ this.toast(r.error, 'err'); return; }
       this.toast('Path set for ' + name + ' — restarting'); this.refresh();
     },
+
+    /* ---- projects & groups ---- */
+    openNewProject(){
+      this.newProject = { name:'', path:'', description:'' };
+      this.$refs.projectDlg.showModal();
+      this.$nextTick(()=>{ this.$refs.npName && this.$refs.npName.focus(); });
+    },
+    async createProject(){
+      const name = this.newProject.name.trim();
+      if(!name) return;
+      const r = await this.api('/api/projects',{method:'POST',headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({name, path:this.newProject.path.trim(), description:this.newProject.description.trim()})});
+      if(r.error){ this.toast(r.error,'err'); return; }   // keep the modal open on error
+      this.toast('Created project '+name);
+      this.$refs.projectDlg.close(); this.refresh();
+    },
+    openNewAgent(){
+      this.newAgent = { name:'', role:'', project_dir:'', project:'' };
+      this.$refs.agentDlg.showModal();
+      this.$nextTick(()=>{ this.$refs.naName && this.$refs.naName.focus(); });
+    },
+    // pre-fill the directory from the chosen project's path (a convenience default)
+    onNewAgentProject(){
+      const p = this.projects.find(p=>p.name===this.newAgent.project);
+      if(p && p.path && !this.newAgent.project_dir.trim()) this.newAgent.project_dir = p.path;
+    },
+    async createAgent(){
+      const name = this.newAgent.name.trim(), project_dir = this.newAgent.project_dir.trim();
+      if(!name || !project_dir) return;
+      const r = await this.api('/api/agents',{method:'POST',headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({name, role:this.newAgent.role.trim(), project_dir, project:this.newAgent.project})});
+      if(r.error){ this.toast(r.error,'err'); return; }
+      this.toast('Added agent '+name+' — spawning');
+      this.$refs.agentDlg.close(); this.refresh();
+    },
+    openGroup(name, project){
+      this.groupEdit = { name, project: project || '' };
+      this.$refs.groupDlg.showModal();
+      this.$nextTick(()=>{ this.$refs.geProject && this.$refs.geProject.focus(); });
+    },
+    async saveGroup(){
+      const { name, project } = this.groupEdit;
+      const r = await this.api('/api/agent/group',{method:'POST',headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({name, project})});
+      if(r.error){ this.toast(r.error,'err'); return; }
+      this.toast(project ? ('Moved '+name+' → '+project) : ('Ungrouped '+name));
+      this.$refs.groupDlg.close(); this.refresh();
+    },
+
+    /* ---- per-group actions (v2): task the group / rename / delete ---- */
+    openGroupTask(project){
+      this.groupTask = { project, description:'' };
+      this.$refs.groupTaskDlg.showModal();
+      this.$nextTick(()=>{ this.$refs.gtDesc && this.$refs.gtDesc.focus(); });
+    },
+    async submitGroupTask(){
+      const description = this.groupTask.description.trim();
+      if(!description) return;
+      const project = this.groupTask.project;
+      const r = await this.api('/api/tasks/group',{method:'POST',headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({project, description})});
+      if(r.error){ this.toast(r.error,'err'); return; }   // keep the modal open on error
+      this.toast('Queued '+(r.count||0)+' tasks to '+project);
+      this.$refs.groupTaskDlg.close(); this.refresh();
+    },
+    // queue a goal to a single PM agent (reuses the single-agent /api/tasks endpoint)
+    openManagerTask(agent){
+      this.managerTask = { agent, description:'' };
+      this.$refs.managerTaskDlg.showModal();
+      this.$nextTick(()=>{ this.$refs.mtDesc && this.$refs.mtDesc.focus(); });
+    },
+    async submitManagerTask(){
+      const description = this.managerTask.description.trim(), agent = this.managerTask.agent;
+      if(!description || !agent) return;
+      const r = await this.api('/api/tasks',{method:'POST',headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({agent, description})});
+      if(r.error){ this.toast(r.error,'err'); return; }   // keep the modal open on error
+      this.toast('Queued '+(r.id||'task')+' → '+agent);
+      this.$refs.managerTaskDlg.close(); this.refresh();
+    },
+    openRename(name){
+      this.renameProject = { name, new_name:name };
+      this.$refs.renameDlg.showModal();
+      this.$nextTick(()=>{ if(this.$refs.rnName){ this.$refs.rnName.focus(); this.$refs.rnName.select(); } });
+    },
+    async submitRename(){
+      const new_name = this.renameProject.new_name.trim(), name = this.renameProject.name;
+      if(!new_name) return;
+      const r = await this.api('/api/projects/rename',{method:'POST',headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({name, new_name})});
+      if(r.error){ this.toast(r.error,'err'); return; }   // keep the modal open on error
+      this.toast('Renamed '+name+' → '+new_name);
+      this.$refs.renameDlg.close(); this.refresh();
+    },
+    async deleteProject(name){
+      if(!confirm('Delete project "'+name+'"? Its agents are ungrouped, not deleted.')) return;
+      const r = await this.api('/api/projects/delete',{method:'POST',headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({name})});
+      if(r && r.error){ this.toast(r.error,'err'); }
+      else if(r && r.ok===false){ this.toast('No project named '+name,'err'); }
+      else { this.toast('Deleted project '+name); }
+      this.refresh();
+    },
+
+    /* ---- Projects tab (v3): edit path/desc, add/move/remove members ---- */
+    openEditProject(name){
+      const p = this.projects.find(p=>p.name===name) || {name, path:'', description:''};
+      this.editProject = { name:p.name, path:p.path||'', description:p.description||'' };
+      this.$refs.editProjectDlg.showModal();
+      this.$nextTick(()=>{ this.$refs.epPath && this.$refs.epPath.focus(); });
+    },
+    async submitEditProject(){
+      const { name } = this.editProject;
+      const r = await this.api('/api/projects/update',{method:'POST',headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({name, path:this.editProject.path.trim(), description:this.editProject.description.trim()})});
+      if(r.error){ this.toast(r.error,'err'); return; }   // keep the modal open on error
+      this.toast('Updated project '+name);
+      this.$refs.editProjectDlg.close(); this.refresh();
+    },
+    openAddExisting(project){
+      this.addExisting = { project, name:'' };
+      this.$refs.addExistingDlg.showModal();
+      this.$nextTick(()=>{ this.$refs.aeSelect && this.$refs.aeSelect.focus(); });
+    },
+    async submitAddExisting(){
+      const { name, project } = this.addExisting;
+      if(!name) return;
+      const r = await this.api('/api/agent/group',{method:'POST',headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({name, project})});
+      if(r.error){ this.toast(r.error,'err'); return; }
+      this.toast('Added '+name+' → '+project);
+      this.$refs.addExistingDlg.close(); this.refresh();
+    },
+    // open the existing "Add agent" modal pre-targeted at a project (dir defaults to its path)
+    openNewAgentIn(project){
+      const p = this.projects.find(p=>p.name===project);
+      this.newAgent = { name:'', role:'', project_dir:(p && p.path) ? p.path : '', project };
+      this.$refs.agentDlg.showModal();
+      this.$nextTick(()=>{ this.$refs.naName && this.$refs.naName.focus(); });
+    },
+    async removeFromProject(name){
+      const r = await this.api('/api/agent/group',{method:'POST',headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({name, project:''})});
+      if(r.error){ this.toast(r.error,'err'); return; }
+      this.toast('Removed '+name+' from its project'); this.refresh();
+    },
+    async assignToProject(name, project){
+      if(!project) return;
+      const r = await this.api('/api/agent/group',{method:'POST',headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({name, project})});
+      if(r.error){ this.toast(r.error,'err'); return; }
+      this.toast('Assigned '+name+' → '+project); this.refresh();
+    },
+
     stopFollow(){ if(this._followTimer){ clearInterval(this._followTimer); this._followTimer = null; } this.log.follow = false; },
     toggleFollow(){
       if(this._followTimer){ this.stopFollow(); return; }

@@ -31,6 +31,7 @@ from common import (SESSION, STATE_DIR, TASKS_DIR, REGISTRY, NAME_RE,
                     DONE_MARKER)
 from common import _now, _die
 import backend
+import worker_status
 
 _backend = backend.get_backend()
 
@@ -63,8 +64,34 @@ def _send_text(name: str, text: str) -> None:
     _backend.send_text(name, text)
 
 
+def _send_keys(name: str, data: bytes) -> None:
+    """Raw-keystroke path used by the dashboard's interactive terminal — bytes
+    flow verbatim to the worker's PTY (no whitespace coalescing, no auto
+    Enter). Falls back to the backend's default no-op when the active backend
+    hasn't implemented it.
+    """
+    _backend.send_keys(name, data)
+
+
 def _worker_state(name: str) -> str:
-    """Heuristic: 'busy' | 'done' | 'idle' | 'gone' from pane contents."""
+    """'busy' | 'done' | 'idle' | 'gone'.
+
+    Reads the worker-status file *first* (the agent_host updates it from the
+    BUSY-marker state of the embedded claude TUI and on shutdown), and falls
+    back to the legacy capture + ``WORKER-DONE:`` marker heuristic when the
+    file is missing or its heartbeat is stale — so workers spawned before
+    this protocol existed keep being detected correctly.
+    """
+    st = worker_status.read_status(name)
+    if st is not None and worker_status.heartbeat_fresh(st):
+        s = st.get("state")
+        if s == "running":
+            return "busy"
+        if s == "done":
+            return "done"
+        if s == "starting":
+            return "idle"
+        # "error" -> fall through to legacy detection below.
     if not _window_exists(name):
         return "gone"
     cap = _capture(name, 120).lower()

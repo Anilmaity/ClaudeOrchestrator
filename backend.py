@@ -33,6 +33,14 @@ class Backend:
     def send_text(self, name: str, text: str) -> None:
         raise NotImplementedError
 
+    def send_keys(self, name: str, data: bytes) -> None:
+        """Write ``data`` to the worker's terminal verbatim — no whitespace
+        coalescing, no auto Enter. The dashboard's interactive terminal uses
+        this to forward single keystrokes (Enter, arrows, Ctrl+C, …) as the
+        matching VT bytes. Default no-op so backends that can't support raw
+        injection (legacy stubs) don't break callers; real backends override.
+        """
+
     def kill(self, name: str) -> None:
         raise NotImplementedError
 

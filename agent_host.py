@@ -7,6 +7,8 @@ The visible console window this runs in shows the live claude TUI.
 """
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import os
 import shutil as _shutil
@@ -19,6 +21,12 @@ from pathlib import Path
 
 from screen_buffer import ScreenBuffer
 import common
+import worker_status
+
+# How often the heartbeat thread refreshes last_beat in the agent's status
+# file. The fleet treats anything older than worker_status.HEARTBEAT_FRESH_SECS
+# (default 60s) as stale, so 15s gives 3 missed beats of slack.
+HEARTBEAT_INTERVAL_SECS = 15
 
 
 class _Handler(socketserver.StreamRequestHandler):
@@ -41,6 +49,24 @@ class _Handler(socketserver.StreamRequestHandler):
             self.wfile.write(host.screen.text(lines=n).encode())
         elif cmd == "SEND":
             host.inject(arg)
+            self.wfile.write(b"OK")
+        elif cmd == "KEYS":
+            # Raw-keystroke path: arg is a base64 payload of the bytes to write
+            # to the embedded TUI verbatim (no whitespace coalescing, no auto
+            # Enter, no inter-write delay). Used by the dashboard's interactive
+            # terminal so a user pressing Enter / arrows / Ctrl+C in the
+            # browser maps to the matching VT sequence on the agent's PTY.
+            try:
+                raw = base64.b64decode(arg, validate=True)
+            except (binascii.Error, ValueError):
+                self.wfile.write(b"ERR bad base64")
+                return
+            try:
+                text = raw.decode("utf-8", errors="replace")
+            except UnicodeDecodeError:
+                self.wfile.write(b"ERR bad utf-8")
+                return
+            host.write(text)
             self.wfile.write(b"OK")
         elif cmd == "STOP":
             self.wfile.write(b"OK")
@@ -72,6 +98,11 @@ class AgentHost:
         # _write_status runs from both the server thread and the pump thread;
         # this guards the shared .tmp write/replace.
         self._status_lock = threading.Lock()
+        # Reflects the BUSY-marker state of the embedded claude TUI so the
+        # heartbeat thread doesn't have to re-scan the screen. Updated by the
+        # pump and consumed by _heartbeat_tick. None until first observation.
+        self._worker_busy: bool | None = None
+        self._heartbeat_stop = threading.Event()
 
     @classmethod
     def for_test(cls, child, cols=80, rows=24):
@@ -97,6 +128,60 @@ class AgentHost:
         if self._dialog_pending():
             return
         self.ready = True
+        # Ready footer means the TUI is idle and waiting for input — NOT that
+        # Claude is mid-turn. Write "done" (the dispatcher's "idle / ready to
+        # receive" state); observe_screen_for_status will promote to "running"
+        # the moment a busy marker appears on screen.
+        self._write_worker_status(state="done")
+
+    def _write_worker_status(self, **fields) -> None:
+        """Best-effort merge-write to ``~/.claude-orch/status/<name>.json``.
+
+        Writes never raise: a corrupt status dir or transient disk error must
+        not bring down the pump or the host's control socket.
+        """
+        try:
+            worker_status.write_status(self.name, **fields)
+        except (OSError, ValueError):
+            _log_crash(self.name, "worker-status-write")
+
+    def observe_screen_for_status(self) -> None:
+        """Drive the worker-status state machine from the current screen.
+
+        Called from the pump after each chunk of TUI output. The transitions:
+
+          idle -> busy  : state="running"          (claude started a turn)
+          busy -> idle  : state="done"             (turn finished; signals task
+                                                    completion to the fleet)
+
+        ``starting`` is the initial state until the READY footer is seen; from
+        there the host owns the state field until shutdown.
+        """
+        try:
+            low = self.screen.text().lower()
+        except Exception:
+            return
+        busy = any(m in low for m in common.BUSY_MARKERS)
+        if self._worker_busy is None:
+            self._worker_busy = busy
+            return
+        if busy and not self._worker_busy:
+            self._worker_busy = True
+            self._write_worker_status(state="running")
+        elif not busy and self._worker_busy:
+            self._worker_busy = False
+            self._write_worker_status(state="done")
+
+    def _heartbeat_tick(self) -> None:
+        """One heartbeat iteration: refresh ``last_beat`` (state preserved)."""
+        self._write_worker_status()
+
+    def start_heartbeat(self, interval: float = HEARTBEAT_INTERVAL_SECS) -> None:
+        """Spawn a daemon thread that heartbeats every ``interval`` seconds."""
+        def _run():
+            while not self._heartbeat_stop.wait(interval):
+                self._heartbeat_tick()
+        threading.Thread(target=_run, daemon=True).start()
 
     def _dialog_pending(self) -> bool:
         """True while a trust/bypass dialog is still awaiting input on screen."""
@@ -159,6 +244,7 @@ class AgentHost:
 
     def shutdown(self):
         # NOTE: never call os._exit here — tests run AgentHost in-process.
+        self._heartbeat_stop.set()
         self.stop_server()
         pty = self._pty
         if pty is not None:
@@ -178,6 +264,10 @@ class AgentHost:
                 self.status_path.unlink()
             except OSError:
                 pass
+        # Leave one final record of the lifecycle in the worker-status file so
+        # an outside reader (./fleet status, dashboard) sees a definitive end
+        # state rather than a stale "running".
+        self._write_worker_status(state="done")
 
 
 class _PtyChild:
@@ -258,6 +348,7 @@ def _pump(host):
                     continue
                 host.mark_ready_if_seen()
                 host._write_status()
+                host.observe_screen_for_status()
             else:
                 time.sleep(0.05)
         except Exception:
@@ -324,6 +415,13 @@ def _forward_console_input(host) -> None:
 
 def main(argv=None):
     argv = argv if argv is not None else sys.argv[1:]
+    # --headless drops the per-agent visible console: no window title, no
+    # msvcrt keystroke forwarder (there's no console to read from), and the
+    # _pump's sys.stdout.write echo no-ops naturally because stdout is
+    # DEVNULL. The dashboard's interactive terminal replaces what the local
+    # console used to provide.
+    headless = "--headless" in argv
+    argv = [a for a in argv if a != "--headless"]
     name, project_dir, status_path = argv[0], argv[1], Path(argv[2])
     role_file = argv[3] if len(argv) > 3 else ""
     cols, rows = _shutil.get_terminal_size(fallback=(120, 50))
@@ -335,20 +433,44 @@ def main(argv=None):
         cmd += ["--append-system-prompt", role]
     host = spawn_conpty(name, cmd, project_dir, cols, rows, status_path)
     host.start_server()
-    try:
-        os.system(f"title corch:{name}")  # window title
-    except Exception:
-        pass
-    # Forward this console's keystrokes to claude so the window is interactive
-    # (the orch control socket still drives it too, for peek/send/dispatch).
-    threading.Thread(target=_forward_console_input, args=(host,),
-                     daemon=True).start()
+    # Seed the worker-status file before the pump starts so external readers
+    # (./fleet status, dashboard) see "starting" immediately instead of a
+    # window of "no file -> fall back to legacy heuristic".
+    host._write_worker_status(state="starting", pid=os.getpid(),
+                              task_id="", progress_note="")
+    host.start_heartbeat()
+    if not headless:
+        try:
+            os.system(f"title corch:{name}")  # window title
+        except Exception:
+            pass
+        # Forward this console's keystrokes to claude so the window is
+        # interactive (the orch control socket still drives it too, for
+        # peek/send/dispatch). Skipped in headless mode: there's no console
+        # for msvcrt.getwch() to read from, and the dashboard /api/agent/keys
+        # path now covers raw-keystroke injection.
+        threading.Thread(target=_forward_console_input, args=(host,),
+                         daemon=True).start()
+    pump_crashed = False
     try:
         host.start_pump(background=False)  # blocks until claude exits / STOP
     except Exception:
+        pump_crashed = True
         _log_crash(name, "pump-fatal")
+        try:
+            worker_status.write_status(name, state="error")
+        except (OSError, ValueError):
+            pass
     finally:
         host.shutdown()
+        # shutdown() writes state="done"; promote that to "error" if the pump
+        # itself crashed, so the fleet can distinguish a clean exit from a
+        # process death.
+        if pump_crashed:
+            try:
+                worker_status.write_status(name, state="error")
+            except (OSError, ValueError):
+                pass
     return 0
 
 
