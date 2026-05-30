@@ -99,11 +99,21 @@ class WinBackend(Backend):
         args = [sys.executable, str(HOST_SCRIPT), name, project_dir, str(status)]
         if role_file:
             args.append(role_file)
+        # Headless by default: the dashboard's interactive Attention tab now
+        # owns terminal viewing and keystroke entry, so the per-agent console
+        # window is just clutter on a multi-monitor desktop. CREATE_NO_WINDOW
+        # detaches from any visible console; DEVNULL handles keep the child's
+        # Python stdio from inheriting the parent's pipes (the embedded TUI
+        # gets its own ConPTY anyway).
+        args.append("--headless")
         try:
-            flags = subprocess.CREATE_NEW_CONSOLE  # type: ignore[attr-defined]
+            flags = subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]
         except AttributeError:
             flags = 0
-        subprocess.Popen(args, creationflags=flags, cwd=project_dir)
+        subprocess.Popen(args, creationflags=flags, cwd=project_dir,
+                         stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL)
         deadline = time.time() + ready_timeout
         while time.time() < deadline:
             st = _read_status(name)
@@ -133,6 +143,15 @@ class WinBackend(Backend):
         port = self._port(name)
         if port is not None:
             _ask(port, f"SEND {' '.join(text.split())}")
+
+    def send_keys(self, name: str, data: bytes) -> None:
+        port = self._port(name)
+        if port is None:
+            return
+        # Base64 frames the bytes safely over the line-based control protocol —
+        # the agent_host KEYS handler reverses it before writing to the PTY.
+        import base64
+        _ask(port, "KEYS " + base64.b64encode(data).decode("ascii"))
 
     def kill(self, name: str) -> None:
         st = _read_status(name)

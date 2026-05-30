@@ -68,6 +68,54 @@ class TmuxBackend(Backend):
         time.sleep(0.25)
         self._tmux("send-keys", "-t", self._target(name), "Enter")
 
+    def send_keys(self, name: str, data: bytes) -> None:
+        # Best-effort raw injection over tmux: send-keys -l writes literally,
+        # but tmux interprets a small set of bytes as key names. We translate
+        # the common VT escape sequences (arrows, Enter, Esc, Ctrl-C, …) into
+        # tmux key names so an interactive dashboard user gets a usable
+        # experience even when the fleet is running under tmux instead of
+        # ConPTY.
+        target = self._target(name)
+        i, n = 0, len(data)
+        seqs = [
+            (b"\x1b[A", "Up"), (b"\x1b[B", "Down"),
+            (b"\x1b[C", "Right"), (b"\x1b[D", "Left"),
+            (b"\x1b[H", "Home"), (b"\x1b[F", "End"),
+            (b"\x1b[3~", "DC"), (b"\x1b[5~", "PPage"), (b"\x1b[6~", "NPage"),
+        ]
+        single = {b"\r": "Enter", b"\n": "Enter", b"\t": "Tab",
+                  b"\x1b": "Escape", b"\x7f": "BSpace", b"\x08": "BSpace",
+                  b"\x03": "C-c", b"\x04": "C-d"}
+        buf = bytearray()
+
+        def flush_buf():
+            if not buf:
+                return
+            self._tmux("send-keys", "-t", target, "-l", "--",
+                       buf.decode("utf-8", errors="replace"))
+            buf.clear()
+
+        while i < n:
+            matched = False
+            for raw, key in seqs:
+                if data[i:i + len(raw)] == raw:
+                    flush_buf()
+                    self._tmux("send-keys", "-t", target, key)
+                    i += len(raw)
+                    matched = True
+                    break
+            if matched:
+                continue
+            b = data[i:i + 1]
+            if b in single:
+                flush_buf()
+                self._tmux("send-keys", "-t", target, single[b])
+                i += 1
+                continue
+            buf.append(data[i])
+            i += 1
+        flush_buf()
+
     def _ensure_launcher(self) -> None:
         STATE_DIR.mkdir(parents=True, exist_ok=True)
         if not LAUNCHER.exists() or LAUNCHER.read_text() != _LAUNCHER_BODY:
