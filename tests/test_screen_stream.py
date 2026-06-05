@@ -109,3 +109,42 @@ def test_iter_frames_parses_payloads_and_heartbeats():
 def test_iter_frames_stops_at_eof():
     out = list(win_backend._iter_frames(_io.BytesIO(b"")))
     assert out == []
+
+
+import fleet
+
+
+def test_sse_data_json_encodes_newlines():
+    out = fleet._sse_data({"screen": "a\nb"})
+    assert out == b'data: {"screen": "a\\nb"}\n\n'
+
+
+def test_sse_ping_comment():
+    assert fleet._sse_ping() == b": ping\n\n"
+
+
+class _FakeBackend:
+    def __init__(self, items): self._items = items
+    def stream_screen(self, name):
+        for it in self._items:
+            yield it
+
+
+def test_stream_agent_screen_maps_frames_and_heartbeats():
+    writes = []
+    be = _FakeBackend(["scr1", backend_mod.HEARTBEAT, "scr2"])
+    fleet.stream_agent_screen(writes.append, be, "x")
+    assert writes[0] == fleet._sse_data({"screen": "scr1"})
+    assert writes[1] == fleet._sse_ping()
+    assert writes[2] == fleet._sse_data({"screen": "scr2"})
+
+
+def test_stream_agent_screen_stops_on_broken_pipe():
+    calls = {"n": 0}
+    def writer(_b):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise BrokenPipeError()
+    be = _FakeBackend(["a", "b", "c"])
+    fleet.stream_agent_screen(writer, be, "x")   # must not raise
+    assert calls["n"] == 2                         # stopped at the broken write
