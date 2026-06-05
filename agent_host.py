@@ -103,6 +103,25 @@ class _Handler(socketserver.StreamRequestHandler):
         elif cmd == "STOP":
             self.wfile.write(b"OK")
             threading.Thread(target=host.shutdown, daemon=True).start()
+        elif cmd == "STREAM":
+            # Long-lived push of the rendered screen. Subscribe, send frames as
+            # the screen changes, emit a heartbeat on idle, and clean up when the
+            # client disconnects (write raises).
+            q = host.subscribe()
+            try:
+                while True:
+                    try:
+                        txt = q.get(timeout=STREAM_HEARTBEAT_SECS)
+                    except queue.Empty:
+                        _write_frame(self.wfile, b"")        # heartbeat
+                        self.wfile.flush()
+                        continue
+                    _write_frame(self.wfile, txt.encode("utf-8", "replace"))
+                    self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                pass
+            finally:
+                host.unsubscribe(q)
         else:
             self.wfile.write(b"ERR unknown")
 
@@ -418,6 +437,7 @@ def _pump(host):
                 host.mark_ready_if_seen()
                 host._write_status()
                 host.observe_screen_for_status()
+                host.publish_screen()
             else:
                 time.sleep(0.05)
         except Exception:
