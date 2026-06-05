@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import json
 import os
 import signal
@@ -486,6 +487,61 @@ def load_auth(path: Path | None = None) -> dict | None:
         except (OSError, json.JSONDecodeError):
             return None
     return auth.load_auth_config(data)
+
+
+# --- Auth fast-path cache --------------------------------------------------
+# PBKDF2 verification (200k iterations) costs ~150 ms. The dashboard's
+# interactive terminal makes one HTTP request per keystroke, so re-running
+# PBKDF2 on every request dominates latency (≈1 s/keystroke over the tunnel).
+# Cache a SUCCESSFUL verification, keyed by a hash of the exact Authorization
+# header PLUS a fingerprint of the current auth config. A wrong header hashes
+# differently → cache miss → falls through to PBKDF2, which still rejects it,
+# so the cache only ever accelerates already-valid credentials. Folding the
+# config's hash into the key means rotating the password instantly invalidates
+# every cached entry (no staleness window) and keeps tests isolated.
+_AUTH_CACHE: dict[bytes, tuple[str, float]] = {}
+_AUTH_CACHE_LOCK = threading.Lock()
+_AUTH_CACHE_TTL = 300.0     # seconds a verified header stays trusted
+_AUTH_CACHE_MAX = 512       # cap entries so a credential-spray can't grow it unbounded
+
+
+def _auth_cache_key(header: str, cfg: dict) -> bytes:
+    fp = f"{cfg.get('hash_b64', '')}|{cfg.get('iterations', '')}".encode("utf-8")
+    return hashlib.sha256(header.encode("utf-8", "replace") + b"\x00" + fp).digest()
+
+
+def auth_cache_lookup(header: str | None, cfg: dict, now: float) -> str | None:
+    """Return the cached username for a previously-verified (header, cfg), or
+    None on a miss/expiry. ``now`` is injected so the TTL is testable."""
+    if not header:
+        return None
+    key = _auth_cache_key(header, cfg)
+    with _AUTH_CACHE_LOCK:
+        ent = _AUTH_CACHE.get(key)
+        if ent is None:
+            return None
+        user, expiry = ent
+        if expiry <= now:
+            _AUTH_CACHE.pop(key, None)
+            return None
+        return user
+
+
+def auth_cache_store(header: str | None, cfg: dict, user: str, now: float) -> None:
+    """Record a successful verification so the next identical request skips
+    PBKDF2. Prunes expired entries (then clears, as a last resort) to stay
+    under ``_AUTH_CACHE_MAX``."""
+    if not header:
+        return
+    key = _auth_cache_key(header, cfg)
+    with _AUTH_CACHE_LOCK:
+        if len(_AUTH_CACHE) >= _AUTH_CACHE_MAX and key not in _AUTH_CACHE:
+            for k, (_u, exp) in list(_AUTH_CACHE.items()):
+                if exp <= now:
+                    _AUTH_CACHE.pop(k, None)
+            if len(_AUTH_CACHE) >= _AUTH_CACHE_MAX:
+                _AUTH_CACHE.clear()
+        _AUTH_CACHE[key] = (user, now + _AUTH_CACHE_TTL)
 
 
 def update_connector(name: str, cfg: dict) -> dict:
@@ -1586,7 +1642,13 @@ class Handler(BaseHTTPRequestHandler):
             cfg = None
         if cfg is None:
             return True   # auth disabled
-        creds = auth.parse_basic_header(self.headers.get("Authorization"))
+        header = self.headers.get("Authorization")
+        # Fast path: an identical header verified within the TTL skips PBKDF2.
+        cached_user = auth_cache_lookup(header, cfg, time.time())
+        if cached_user is not None:
+            self.auth_user = cached_user
+            return True
+        creds = auth.parse_basic_header(header)
         if creds is None:
             self._send_401(cfg["realm"])
             return False
@@ -1594,6 +1656,8 @@ class Handler(BaseHTTPRequestHandler):
         if not auth.check_credentials(user, password, cfg):
             self._send_401(cfg["realm"])
             return False
+        # Verified: cache it so subsequent requests from this browser are cheap.
+        auth_cache_store(header, cfg, user, time.time())
         # Expose the authenticated username to handlers that want it.
         self.auth_user = user
         return True
