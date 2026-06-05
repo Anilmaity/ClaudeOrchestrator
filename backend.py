@@ -3,6 +3,15 @@ from __future__ import annotations
 
 import os
 import sys
+import time
+
+# --- live screen streaming -------------------------------------------------
+# Sentinel a stream_screen generator yields to mean "no new screen, just keep
+# the connection warm". The SSE layer maps it to an ``: ping`` comment.
+HEARTBEAT = object()
+# Base (poll-based) fallback cadence. Overridable in tests.
+STREAM_POLL_SECS = 0.2
+STREAM_HEARTBEAT_SECS = 10.0
 
 
 class Backend:
@@ -40,6 +49,25 @@ class Backend:
         matching VT bytes. Default no-op so backends that can't support raw
         injection (legacy stubs) don't break callers; real backends override.
         """
+
+    def stream_screen(self, name: str):
+        """Yield the agent's rendered screen text whenever it changes, and a
+        ``HEARTBEAT`` sentinel when it has been idle. Generator ends when the
+        worker stops existing. This default polls ``capture``; backends with a
+        push channel (Windows ConPTY host) override it."""
+        last = None
+        last_emit = time.monotonic()
+        while self.worker_exists(name):
+            txt = self.capture(name)
+            now = time.monotonic()
+            if txt != last:
+                last = txt
+                last_emit = now
+                yield txt
+            elif now - last_emit >= STREAM_HEARTBEAT_SECS:
+                last_emit = now
+                yield HEARTBEAT
+            time.sleep(STREAM_POLL_SECS)
 
     def kill(self, name: str) -> None:
         raise NotImplementedError
