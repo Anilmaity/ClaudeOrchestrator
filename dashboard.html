@@ -867,80 +867,84 @@
   </div>
   </div><!-- /dashboard tab -->
 
-  <div x-show=”tab==='attention'” x-cloak>
-    <section class=”card”>
-      <div class=”section-head”>
+  <div x-show="tab==='attention'" x-cloak>
+    <section class="card">
+      <div class="section-head">
         <h2>Live terminal</h2>
-        <div class=”row-actions term-select-row”>
-          <label for=”term-select” class=”muted” style=”font-size:var(--fs-300)”>Agent</label>
-          <select id=”term-select” class=”term-select” x-model=”termAgent” @change=”openTerm()”>
-            <optgroup label=”Managers”>
-              <template x-for=”a in termManagers” :key=”a.name”>
-                <option :value=”a.name” x-text=”termLabel(a)”></option>
-              </template>
-            </optgroup>
-            <optgroup label=”Workers”>
-              <template x-for=”a in termWorkers” :key=”a.name”>
-                <option :value=”a.name” x-text=”termLabel(a)”></option>
-              </template>
-            </optgroup>
+        <div class="row-actions term-select-row">
+          <label for="term-select" class="muted" style="font-size:var(--fs-300)">Agent</label>
+          <select id="term-select" class="term-select" x-model="termAgent" @change="openTerm()">
+            <template x-if="termManagers.length">
+              <optgroup label="Managers">
+                <template x-for="a in termManagers" :key="a.name">
+                  <option :value="a.name" x-text="termLabel(a)"></option>
+                </template>
+              </optgroup>
+            </template>
+            <template x-if="termWorkers.length">
+              <optgroup label="Workers">
+                <template x-for="a in termWorkers" :key="a.name">
+                  <option :value="a.name" x-text="termLabel(a)"></option>
+                </template>
+              </optgroup>
+            </template>
           </select>
-          <span class=”badge”
-                :data-s=”termStatus==='live'?'busy':(termStatus==='offline'?'offline':'idle')”
-                :title=”'stream: '+termStatus”>
-            <span class=”d”></span><span x-text=”termStatus”></span>
+          <span class="badge" x-show="termStatus"
+                :data-s="termStatus==='live'?'busy':(termStatus==='offline'?'offline':(termStatus==='connecting'?'busy':'idle'))"
+                :title="'stream: '+termStatus">
+            <span class="d"></span><span x-text="termStatus"></span>
           </span>
-          <span class=”attn-spacer”></span>
-          <button class=”mini ghost” type=”button” @click=”openTerm()” title=”Reconnect the live stream”>⟳ reconnect</button>
-          <button class=”mini ghost” type=”button” x-show=”termAgent” @click=”liveLog(termAgent)” title=”Open full live log”>⤢ full log</button>
+          <span class="attn-spacer"></span>
+          <button class="mini ghost" type="button" @click="openTerm()" title="Reconnect the live stream">⟳ reconnect</button>
+          <button class="mini ghost" type="button" x-show="termAgent" @click="liveLog(termAgent)" title="Open full live log">⤢ full log</button>
         </div>
       </div>
 
-      <template x-if=”!termAgent”>
-        <div class=”empty”>Pick an agent from the dropdown to open its live terminal.</div>
+      <template x-if="!termAgent">
+        <div class="empty">Pick an agent from the dropdown to open its live terminal.</div>
       </template>
 
-      <template x-if=”termAgent”>
-        <div class=”attn-row”>
-          <pre class=”attn-tail live” tabindex=”0”
-               :aria-label=”'live terminal — focus to type into '+termAgent”
-               @keydown=”handleTermKey($event, termAgent)”
-               x-text=”termText || '(loading terminal…)'”></pre>
-          <div class=”quick-keys” :aria-label=”'quick keys for '+termAgent”>
-            <span class=”qk-hint”>Click the terminal above, then type — or tap:</span>
-            <template x-for=”k in quickKeys” :key=”k.label”>
-              <button type=”button” class=”qk” :class=”{danger:k.danger}”
-                      :title=”k.title” @click=”sendKeys(termAgent, k.bytes)” x-text=”k.label”></button>
+      <template x-if="termAgent">
+        <div class="attn-row">
+          <pre class="attn-tail live" tabindex="0"
+               :aria-label="'live terminal — focus to type into '+termAgent"
+               @keydown="handleTermKey($event, termAgent)"
+               x-text="termText || '(loading terminal…)'"></pre>
+          <div class="quick-keys" :aria-label="'quick keys for '+termAgent">
+            <span class="qk-hint">Click the terminal above, then type — or tap:</span>
+            <template x-for="k in quickKeys" :key="k.label">
+              <button type="button" class="qk" :class="{danger:k.danger}"
+                      :title="k.title" @click="sendKeys(termAgent, k.bytes)" x-text="k.label"></button>
             </template>
           </div>
 
-          <div class=”attn-actions”>
-            <div class=”attn-action”>
-              <label for=”term-reply”>Reply (sent as keystrokes to <span x-text=”termAgent”></span>)</label>
-              <div class=”attn-row-input”>
-                <input id=”term-reply”
-                       :aria-label=”'reply to '+termAgent”
-                       :placeholder=”'answer '+termAgent+'… (Enter to send)'”
-                       x-model=”reply[termAgent]”
-                       @keydown.enter=”sendMsg(termAgent)”>
-                <button class=”primary” type=”button” @click=”sendMsg(termAgent)”
-                        :disabled=”!(reply[termAgent]||'').trim()”>Send reply</button>
+          <div class="attn-actions">
+            <div class="attn-action">
+              <label for="term-reply">Reply (sent as keystrokes to <span x-text="termAgent"></span>)</label>
+              <div class="attn-row-input">
+                <input id="term-reply"
+                       :aria-label="'reply to '+termAgent"
+                       :placeholder="'answer '+termAgent+'… (Enter to send)'"
+                       x-model="reply[termAgent]"
+                       @keydown.enter="sendMsg(termAgent)">
+                <button class="primary" type="button" @click="sendMsg(termAgent)"
+                        :disabled="!(reply[termAgent]||'').trim()">Send reply</button>
               </div>
-              <div class=”attn-hint”>Use this for one-liner answers, “1”, “yes”, or a steering nudge.</div>
+              <div class="attn-hint">Use this for one-liner answers, "1", "yes", or a steering nudge.</div>
             </div>
 
-            <div class=”attn-action”>
-              <label for=”term-task”>Queue a new task for <span x-text=”termAgent”></span></label>
-              <div class=”attn-row-input”>
-                <textarea id=”term-task”
-                          :aria-label=”'queue task for '+termAgent”
-                          placeholder=”Describe the task… (Ctrl+Enter to queue)”
-                          x-model=”attnTask[termAgent]”
-                          @keydown.enter=”if($event.ctrlKey||$event.metaKey){$event.preventDefault(); queueAttnTask(termAgent);}”></textarea>
-                <button class=”primary” type=”button” @click=”queueAttnTask(termAgent)”
-                        :disabled=”!(attnTask[termAgent]||'').trim()”>Queue task</button>
+            <div class="attn-action">
+              <label for="term-task">Queue a new task for <span x-text="termAgent"></span></label>
+              <div class="attn-row-input">
+                <textarea id="term-task"
+                          :aria-label="'queue task for '+termAgent"
+                          placeholder="Describe the task… (Ctrl+Enter to queue)"
+                          x-model="attnTask[termAgent]"
+                          @keydown.enter="if($event.ctrlKey||$event.metaKey){$event.preventDefault(); queueAttnTask(termAgent);}"></textarea>
+                <button class="primary" type="button" @click="queueAttnTask(termAgent)"
+                        :disabled="!(attnTask[termAgent]||'').trim()">Queue task</button>
               </div>
-              <div class=”attn-hint”>Goes through the dispatcher; runs once the agent is idle.</div>
+              <div class="attn-hint">Goes through the dispatcher; runs once the agent is idle.</div>
             </div>
           </div>
         </div>
@@ -1655,8 +1659,9 @@ function fleet(){
     // ---- live-terminal (Attention tab) ----
     termAgent: '',                  // currently-selected agent for the live terminal
     termText: '',                   // latest rendered screen for termAgent
-    termStatus: 'connecting',       // 'live' | 'connecting' | 'offline'
+    termStatus: '',                 // '' (none yet) | 'live' | 'connecting' | 'offline'
     _termES: null,                  // active EventSource (non-reactive handle)
+    _termOffline: false,            // server reported the agent offline → suppress auto-reconnect
     // modal-backed forms (projects & groups)
     newProject: { name:'', path:'', description:'', dashboard_url:'' },
     newAgent: { name:'', role:'', project_dir:'', project:'' },
@@ -2303,7 +2308,10 @@ function fleet(){
     ensureTerm(){
       if(!this.agents.length) return;                       // wait for first state load
       if(!this.termAgent || !this.agents.find(a=>a.name===this.termAgent)) this.pickDefaultTerm();
-      if(this.termAgent && (!this._termES || this._termES.readyState===2)) this.openTerm();
+      // Don't auto-reopen a stream the server closed because the agent is
+      // offline (it would reconnect-spin every tick); the ⟳ reconnect button
+      // bypasses this guard by calling openTerm() directly.
+      if(this.termAgent && (!this._termES || this._termES.readyState===2) && !this._termOffline) this.openTerm();
     },
     closeTerm(){
       if(this._termES){ try{ this._termES.close(); }catch(e){} this._termES = null; }
@@ -2321,6 +2329,7 @@ function fleet(){
       this.closeTerm();
       if(!this.termAgent) return;
       try{ localStorage.setItem('fleet.termAgent', this.termAgent); }catch(e){}
+      this._termOffline = false;     // fresh attempt; cleared so a recovered agent reconnects
       this.termStatus = 'connecting';
       this.termText = '(connecting…)';
       this.refreshTermOnce();
@@ -2332,7 +2341,7 @@ function fleet(){
         try{
           const d = JSON.parse(e.data);
           if(d.screen != null){ this.termText = d.screen; this.termStatus = 'live'; }
-          else if(d.status === 'offline'){ this.termStatus = 'offline'; }
+          else if(d.status === 'offline'){ this.termStatus = 'offline'; this._termOffline = true; }
         }catch(_){}
       };
       es.onerror = ()=>{ this.termStatus = 'connecting'; }; // EventSource auto-retries
