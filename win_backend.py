@@ -10,7 +10,7 @@ import sys
 import time
 from pathlib import Path
 
-from backend import Backend
+from backend import Backend, HEARTBEAT
 import common
 
 HOST_SCRIPT = Path(__file__).resolve().parent / "agent_host.py"
@@ -47,6 +47,40 @@ def _ask(port: int, line: str, timeout: float = 3.0) -> str | None:
             return b"".join(chunks).decode(errors="replace")
     except OSError:
         return None
+
+
+def _read_frame(rfile):
+    """Read one length-prefixed frame. Returns the payload bytes, ``b""`` for a
+    heartbeat, or ``None`` at EOF / on a malformed length line."""
+    line = rfile.readline()
+    if not line:
+        return None
+    try:
+        n = int(line.strip())
+    except ValueError:
+        return None
+    if n == 0:
+        return b""
+    buf = bytearray()
+    while len(buf) < n:
+        chunk = rfile.read(n - len(buf))
+        if not chunk:
+            break
+        buf += chunk
+    return bytes(buf)
+
+
+def _iter_frames(rfile):
+    """Yield screen strings / HEARTBEAT sentinels from a STREAM connection's
+    length-prefixed frames until EOF."""
+    while True:
+        payload = _read_frame(rfile)
+        if payload is None:
+            return
+        if payload == b"":
+            yield HEARTBEAT
+        else:
+            yield payload.decode("utf-8", "replace")
 
 
 class WinBackend(Backend):
@@ -152,6 +186,31 @@ class WinBackend(Backend):
         # the agent_host KEYS handler reverses it before writing to the PTY.
         import base64
         _ask(port, "KEYS " + base64.b64encode(data).decode("ascii"))
+
+    def stream_screen(self, name: str):
+        """Open the host's STREAM channel and yield screen frames as they arrive.
+        Falls through to nothing (generator ends) if the agent is offline."""
+        port = self._port(name)
+        if port is None:
+            return
+        try:
+            sock = socket.create_connection(("127.0.0.1", port), timeout=3.0)
+        except OSError:
+            return
+        try:
+            sock.sendall(b"STREAM\n")
+            # Generous read timeout: the host heartbeats every ~15s, so 40s of
+            # total silence means the socket is dead — let recv raise and end.
+            sock.settimeout(40.0)
+            rfile = sock.makefile("rb")
+            yield from _iter_frames(rfile)
+        except OSError:
+            return
+        finally:
+            try:
+                sock.close()
+            except OSError:
+                pass
 
     def kill(self, name: str) -> None:
         st = _read_status(name)
