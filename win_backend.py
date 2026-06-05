@@ -10,7 +10,8 @@ import sys
 import time
 from pathlib import Path
 
-from backend import Backend, HEARTBEAT
+import backend as _backend
+from backend import Backend
 import common
 
 HOST_SCRIPT = Path(__file__).resolve().parent / "agent_host.py"
@@ -78,7 +79,9 @@ def _iter_frames(rfile):
         if payload is None:
             return
         if payload == b"":
-            yield HEARTBEAT
+            # Look up the sentinel lazily (not a bound import) so identity holds
+            # even if `backend` is reloaded mid-process (e.g. in tests).
+            yield _backend.HEARTBEAT
         else:
             yield payload.decode("utf-8", "replace")
 
