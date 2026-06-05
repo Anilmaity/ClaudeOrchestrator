@@ -1519,6 +1519,11 @@ def stream_agent_screen(write, backend, name) -> None:
                 write(_sse_data({"screen": item}))
     except (BrokenPipeError, ConnectionResetError, OSError):
         return
+    except Exception:
+        # Headers are already committed; a second HTTP write from the generic
+        # 500 handler would corrupt the SSE stream. Swallow any backend-generator
+        # error and just end the stream.
+        return
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1649,6 +1654,10 @@ class Handler(BaseHTTPRequestHandler):
                 name = (q.get("agent") or [""])[0]
                 if name not in {a["name"] for a in AGENTS}:
                     return self._json({"error": "unknown agent"}, 400)
+                # Resolve liveness (does filesystem I/O) BEFORE committing the
+                # response status, so an I/O error can still surface as a clean
+                # 500 rather than escaping after headers are already sent.
+                online = orch._window_exists(name)
                 # Switch to a streaming response; we own the socket from here.
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream; charset=utf-8")
@@ -1656,7 +1665,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Connection", "keep-alive")
                 self.send_header("X-Accel-Buffering", "no")
                 self.end_headers()
-                if not orch._window_exists(name):
+                if not online:
                     try:
                         self.wfile.write(_sse_data({"status": "offline"}))
                         self.wfile.flush()
