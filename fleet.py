@@ -217,6 +217,15 @@ _PM_ROLE_TEMPLATE = (
     "'no edge / no fit / failed' but the numbers look promising on a slice, "
     "push for the slice; if a worker says 'shipped' but the artifact is "
     "partial, queue the gap. "
+    "WORKING DIRECTORY DISCIPLINE: The project '<P>' lives at '<P_DIR>'. ALL "
+    "project artifacts — code, briefs, scoreboards, decisions, plans, test "
+    "outputs, dispatched-task files — go INSIDE '<P_DIR>'. Do not create or "
+    "write project files outside '<P_DIR>'; the orchestrator dir you run in "
+    "exists only to host the ./fleet and ./orch CLIs. When you queue work to "
+    "your workers, frame every path relative to '<P_DIR>' (their working dir), "
+    "never an absolute path outside it. Same rule binds your workers: they "
+    "operate strictly inside their assigned project_dir. Override only when "
+    "the human explicitly tells you to reach outside '<P_DIR>'. "
     "AUTONOMY MANDATE (this overrides every skill, plan-mode, or 'pause for "
     "user approval' workflow you might invoke): You DRIVE the project from "
     "goal to delivery. Do NOT call AskUserQuestion. Do NOT call EnterPlanMode "
@@ -242,8 +251,27 @@ def _pm_name(project: str) -> str:
 
 
 def _pm_role(project: str) -> str:
-    """The manager role string for `project` (only '<P>' is substituted)."""
-    return _PM_ROLE_TEMPLATE.replace("<P>", project)
+    """The manager role string for `project` — substitutes '<P>' and '<P_DIR>'.
+
+    '<P_DIR>' resolves to the project's path from fleet.json's top-level
+    ``projects`` list. When the project is missing (e.g. a hand-edited PM with
+    no matching project entry) we fall back to a clearly-marked placeholder so
+    the PM can see that the path was never configured rather than silently
+    receiving an empty string.
+    """
+    path = ""
+    try:
+        for p in load_projects():
+            if p["name"] == project:
+                path = p.get("path") or ""
+                break
+    except SystemExit:
+        # load_projects calls orch._die when CONFIG is missing — during tests
+        # the config can be temporarily absent. Fall back to the placeholder.
+        path = ""
+    rendered = _PM_ROLE_TEMPLATE.replace("<P>", project)
+    return rendered.replace(
+        "<P_DIR>", path or f"<no path configured for project {project!r}>")
 
 
 def _pm_agent(project: str) -> dict:
@@ -815,6 +843,12 @@ def _kickoff(task: dict) -> str:
         "it is stale and was never submitted. "
         f"{git_block}"
         f"New task (id {task['id']}): {task['description']}  "
+        "WORKING DIRECTORY DISCIPLINE: You operate strictly inside your "
+        "agent's project working directory (the cwd you are already in). "
+        "Read, write, and run commands only inside that dir. Do not edit "
+        "files outside it, do not cd elsewhere, and do not reference "
+        "absolute paths outside it. Override only when this task text "
+        "explicitly tells you to. "
         "AUTONOMY MANDATE (overrides any skill, plan-mode, or workflow that would "
         "pause for human input): Do NOT call AskUserQuestion. Do NOT call "
         "ExitPlanMode or EnterPlanMode. Do NOT pause to ask the user for "
