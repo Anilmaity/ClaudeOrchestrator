@@ -2341,7 +2341,12 @@ function fleet(){
         try{
           const d = JSON.parse(e.data);
           if(d.screen != null){ this.termText = d.screen; this.termStatus = 'live'; }
-          else if(d.status === 'offline'){ this.termStatus = 'offline'; this._termOffline = true; }
+          else if(d.status === 'offline'){
+            // The server sends this then closes the stream; EventSource would
+            // otherwise auto-reconnect every ~3s. Close it (and set the flag so
+            // the watchdog won't reopen) — ⟳ reconnect re-arms via openTerm().
+            this.termStatus = 'offline'; this._termOffline = true; this.closeTerm();
+          }
         }catch(_){}
       };
       es.onerror = ()=>{ this.termStatus = 'connecting'; }; // EventSource auto-retries
