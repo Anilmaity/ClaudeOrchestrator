@@ -116,6 +116,11 @@ class _Handler(socketserver.StreamRequestHandler):
                         _write_frame(self.wfile, b"")        # heartbeat
                         self.wfile.flush()
                         continue
+                    # Note: an all-blank screen renders as "" and is framed as
+                    # 0\n — identical to the idle heartbeat, so the client treats
+                    # it as "no change" and keeps the prior screen. Harmless in
+                    # practice: the claude TUI always shows its footer/input box,
+                    # so a fully-empty screen effectively never occurs.
                     _write_frame(self.wfile, txt.encode("utf-8", "replace"))
                     self.wfile.flush()
             # Covers both _write_frame and flush() in either path: a disconnected
