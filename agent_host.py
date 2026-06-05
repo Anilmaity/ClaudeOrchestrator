@@ -11,6 +11,7 @@ import base64
 import binascii
 import json
 import os
+import queue
 import shutil as _shutil
 import socket
 import socketserver
@@ -27,6 +28,35 @@ import worker_status
 # file. The fleet treats anything older than worker_status.HEARTBEAT_FRESH_SECS
 # (default 60s) as stale, so 15s gives 3 missed beats of slack.
 HEARTBEAT_INTERVAL_SECS = 15
+
+# How long a STREAM connection waits for a screen change before emitting a
+# zero-length heartbeat frame (keeps the connection + tunnel alive, and surfaces
+# a dead client as a write error so the subscriber gets cleaned up).
+STREAM_HEARTBEAT_SECS = 15.0
+
+
+def _offer(q: "queue.Queue", item) -> None:
+    """Put ``item`` on ``q``; if full, drop the oldest so a slow consumer can
+    never block the producer (the pump thread must never stall)."""
+    try:
+        q.put_nowait(item)
+    except queue.Full:
+        try:
+            q.get_nowait()
+        except queue.Empty:
+            pass
+        try:
+            q.put_nowait(item)
+        except queue.Full:
+            pass
+
+
+def _write_frame(wfile, payload: bytes) -> None:
+    """Write one length-prefixed frame: ``<len>\n`` then the bytes. A zero-length
+    payload (``0\n``) is a heartbeat."""
+    wfile.write(str(len(payload)).encode() + b"\n")
+    if payload:
+        wfile.write(payload)
 
 
 class _Handler(socketserver.StreamRequestHandler):
@@ -103,6 +133,11 @@ class AgentHost:
         # pump and consumed by _heartbeat_tick. None until first observation.
         self._worker_busy: bool | None = None
         self._heartbeat_stop = threading.Event()
+        # Live-screen subscribers (the dashboard's STREAM connections). Each is a
+        # bounded queue fed the rendered screen text whenever it changes.
+        self._subs: list[queue.Queue] = []
+        self._subs_lock = threading.Lock()
+        self._last_pub_text: str | None = None
 
     @classmethod
     def for_test(cls, child, cols=80, rows=24):
@@ -171,6 +206,34 @@ class AgentHost:
         elif not busy and self._worker_busy:
             self._worker_busy = False
             self._write_worker_status(state="done")
+
+    def subscribe(self) -> "queue.Queue":
+        """Register a live-screen subscriber and seed it with the current screen
+        so a freshly-connected client paints immediately. Returns the queue."""
+        q: queue.Queue = queue.Queue(maxsize=8)
+        with self._subs_lock:
+            self._subs.append(q)
+        _offer(q, self.screen.text())
+        return q
+
+    def unsubscribe(self, q: "queue.Queue") -> None:
+        with self._subs_lock:
+            try:
+                self._subs.remove(q)
+            except ValueError:
+                pass
+
+    def publish_screen(self) -> None:
+        """Fan the current rendered screen out to subscribers, but only when it
+        changed since the last publish. Called from the pump after each chunk."""
+        txt = self.screen.text()
+        with self._subs_lock:
+            if txt == self._last_pub_text:
+                return
+            self._last_pub_text = txt
+            subs = list(self._subs)
+        for q in subs:
+            _offer(q, txt)
 
     def _heartbeat_tick(self) -> None:
         """One heartbeat iteration: refresh ``last_beat`` (state preserved)."""
