@@ -142,6 +142,43 @@ def test_forward_console_input_feeds_child(monkeypatch):
     assert "".join(child.written) == "hi\r\x1b[A"
 
 
+def _read_frame(rfile):
+    line = rfile.readline()
+    if not line:
+        return None
+    n = int(line.strip())
+    if n == 0:
+        return b""
+    buf = bytearray()
+    while len(buf) < n:
+        chunk = rfile.read(n - len(buf))
+        if not chunk:
+            break
+        buf += chunk
+    return bytes(buf)
+
+
+def test_stream_pushes_initial_and_changed_screen():
+    child = FakeChild()
+    host = agent_host.AgentHost.for_test(child=child, cols=40, rows=6)
+    host.screen.feed(b"first screen\r\n")
+    port = host.start_server()
+    try:
+        s = socket.create_connection(("127.0.0.1", port), timeout=2)
+        s.sendall(b"STREAM\n")
+        rfile = s.makefile("rb")
+        initial = _read_frame(rfile).decode()
+        assert "first screen" in initial
+        # New output -> publish -> the stream should deliver the new screen.
+        host.screen.feed(b"second screen\r\n")
+        host.publish_screen()
+        nxt = _read_frame(rfile).decode()
+        assert "second screen" in nxt
+        s.close()
+    finally:
+        host.stop_server()
+
+
 winpty_missing = False
 try:
     import winpty  # noqa: F401
