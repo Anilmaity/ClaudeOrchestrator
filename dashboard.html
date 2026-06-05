@@ -437,6 +437,11 @@
     background:var(--st-alert);color:#fff;font-size:var(--fs-200);font-weight:700;line-height:1.5;
     box-shadow:0 0 0 3px var(--st-alert-soft)}
 
+  /* ---- Live-terminal selector ---- */
+  .term-select-row{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap}
+  .term-select{background:#0d0f14;color:var(--text);border:1px solid var(--border);
+    border-radius:6px;padding:5px 9px;font:inherit;max-width:48ch}
+
   /* ---- Attention tab ---- */
   .attn-list{display:flex;flex-direction:column;gap:var(--sp-4);padding:var(--sp-3) 0}
   .attn-row{border:1px solid var(--st-alert-soft);border-left:4px solid var(--st-alert);
@@ -862,148 +867,84 @@
   </div>
   </div><!-- /dashboard tab -->
 
-  <div x-show="tab==='attention'" x-cloak>
-    <section class="card">
-      <div class="section-head">
-        <h2>Needs you — agents blocked on a question</h2>
-        <div class="row-actions">
-          <button class="mini ghost" type="button" @click="refreshAttnLogs()" title="Re-fetch terminal output for every agent below">⟳ refresh logs</button>
+  <div x-show=”tab==='attention'” x-cloak>
+    <section class=”card”>
+      <div class=”section-head”>
+        <h2>Live terminal</h2>
+        <div class=”row-actions term-select-row”>
+          <label for=”term-select” class=”muted” style=”font-size:var(--fs-300)”>Agent</label>
+          <select id=”term-select” class=”term-select” x-model=”termAgent” @change=”openTerm()”>
+            <optgroup label=”Managers”>
+              <template x-for=”a in termManagers” :key=”a.name”>
+                <option :value=”a.name” x-text=”termLabel(a)”></option>
+              </template>
+            </optgroup>
+            <optgroup label=”Workers”>
+              <template x-for=”a in termWorkers” :key=”a.name”>
+                <option :value=”a.name” x-text=”termLabel(a)”></option>
+              </template>
+            </optgroup>
+          </select>
+          <span class=”badge”
+                :data-s=”termStatus==='live'?'busy':(termStatus==='offline'?'offline':'idle')”
+                :title=”'stream: '+termStatus”>
+            <span class=”d”></span><span x-text=”termStatus”></span>
+          </span>
+          <span class=”attn-spacer”></span>
+          <button class=”mini ghost” type=”button” @click=”openTerm()” title=”Reconnect the live stream”>⟳ reconnect</button>
+          <button class=”mini ghost” type=”button” x-show=”termAgent” @click=”liveLog(termAgent)” title=”Open full live log”>⤢ full log</button>
         </div>
       </div>
-      <template x-if="!attnWorkers.length">
-        <div class="empty">
-          No workers currently need you. When an agent pauses on a prompt
-          (numbered choice, y/n, “waiting for your…”), or emits a line starting
-          with <code>NEEDS-INPUT:</code>, it shows up here.
-        </div>
+
+      <template x-if=”!termAgent”>
+        <div class=”empty”>Pick an agent from the dropdown to open its live terminal.</div>
       </template>
 
-      <div class="attn-list">
-        <template x-for="a in attnWorkers" :key="a.name">
-          <div class="attn-row">
-            <div class="attn-head">
-              <span class="attn-name" x-text="a.name"></span>
-              <span class="attn-reason" x-show="a.attention_reason" x-text="a.attention_reason"></span>
-              <span class="attn-spacer"></span>
-              <button class="mini ghost" type="button" @click="refreshAttnLog(a.name)" title="Re-fetch this agent's terminal">⟳</button>
-              <button class="mini ghost" type="button" @click="liveLog(a.name)" title="Open full live log">⤢ full log</button>
+      <template x-if=”termAgent”>
+        <div class=”attn-row”>
+          <pre class=”attn-tail live” tabindex=”0”
+               :aria-label=”'live terminal — focus to type into '+termAgent”
+               @keydown=”handleTermKey($event, termAgent)”
+               x-text=”termText || '(loading terminal…)'”></pre>
+          <div class=”quick-keys” :aria-label=”'quick keys for '+termAgent”>
+            <span class=”qk-hint”>Click the terminal above, then type — or tap:</span>
+            <template x-for=”k in quickKeys” :key=”k.label”>
+              <button type=”button” class=”qk” :class=”{danger:k.danger}”
+                      :title=”k.title” @click=”sendKeys(termAgent, k.bytes)” x-text=”k.label”></button>
+            </template>
+          </div>
+
+          <div class=”attn-actions”>
+            <div class=”attn-action”>
+              <label for=”term-reply”>Reply (sent as keystrokes to <span x-text=”termAgent”></span>)</label>
+              <div class=”attn-row-input”>
+                <input id=”term-reply”
+                       :aria-label=”'reply to '+termAgent”
+                       :placeholder=”'answer '+termAgent+'… (Enter to send)'”
+                       x-model=”reply[termAgent]”
+                       @keydown.enter=”sendMsg(termAgent)”>
+                <button class=”primary” type=”button” @click=”sendMsg(termAgent)”
+                        :disabled=”!(reply[termAgent]||'').trim()”>Send reply</button>
+              </div>
+              <div class=”attn-hint”>Use this for one-liner answers, “1”, “yes”, or a steering nudge.</div>
             </div>
 
-            <pre class="attn-tail live" tabindex="0"
-                 :aria-label="'live terminal — focus to type into '+a.name"
-                 @keydown="handleTermKey($event, a.name)"
-                 x-text="attnLogs[a.name] || '(loading terminal…)'"></pre>
-            <div class="quick-keys" :aria-label="'quick keys for '+a.name">
-              <span class="qk-hint">Click the terminal above, then type — or tap:</span>
-              <template x-for="k in quickKeys" :key="k.label">
-                <button type="button" class="qk" :class="{danger:k.danger}"
-                        :title="k.title" @click="sendKeys(a.name, k.bytes)" x-text="k.label"></button>
-              </template>
-            </div>
-
-            <div class="attn-actions">
-              <div class="attn-action">
-                <label :for="'attn-reply-'+a.name">Reply (sent as keystrokes to the running agent)</label>
-                <div class="attn-row-input">
-                  <input :id="'attn-reply-'+a.name"
-                         :aria-label="'reply to '+a.name"
-                         :placeholder="'answer '+a.name+'… (Enter to send)'"
-                         x-model="reply[a.name]"
-                         @keydown.enter="sendMsg(a.name)">
-                  <button class="primary" type="button" @click="sendMsg(a.name)"
-                          :disabled="!(reply[a.name]||'').trim()">Send reply</button>
-                </div>
-                <div class="attn-hint">Use this for one-liner answers, “1”, “yes”, or a steering nudge.</div>
+            <div class=”attn-action”>
+              <label for=”term-task”>Queue a new task for <span x-text=”termAgent”></span></label>
+              <div class=”attn-row-input”>
+                <textarea id=”term-task”
+                          :aria-label=”'queue task for '+termAgent”
+                          placeholder=”Describe the task… (Ctrl+Enter to queue)”
+                          x-model=”attnTask[termAgent]”
+                          @keydown.enter=”if($event.ctrlKey||$event.metaKey){$event.preventDefault(); queueAttnTask(termAgent);}”></textarea>
+                <button class=”primary” type=”button” @click=”queueAttnTask(termAgent)”
+                        :disabled=”!(attnTask[termAgent]||'').trim()”>Queue task</button>
               </div>
-
-              <div class="attn-action">
-                <label :for="'attn-task-'+a.name">Queue a new task (added to <span x-text="a.name"></span>'s queue)</label>
-                <div class="attn-row-input">
-                  <textarea :id="'attn-task-'+a.name"
-                            :aria-label="'queue task for '+a.name"
-                            placeholder="Describe the task… (Ctrl+Enter to queue)"
-                            x-model="attnTask[a.name]"
-                            @keydown.enter="if($event.ctrlKey||$event.metaKey){$event.preventDefault(); queueAttnTask(a.name);}"></textarea>
-                  <button class="primary" type="button" @click="queueAttnTask(a.name)"
-                          :disabled="!(attnTask[a.name]||'').trim()">Queue task</button>
-                </div>
-                <div class="attn-hint">Goes through the dispatcher; runs once the agent is idle.</div>
-              </div>
+              <div class=”attn-hint”>Goes through the dispatcher; runs once the agent is idle.</div>
             </div>
           </div>
-        </template>
-      </div>
-    </section>
-
-    <section class="card" x-show="managers.length" style="margin-top:var(--sp-4)">
-      <div class="section-head">
-        <h2>Managers — always-on chat</h2>
-        <div class="row-actions">
-          <span class="muted" style="font-size:var(--fs-300);color:var(--text-faint)">Project managers and the global orchestrator — message them anytime.</span>
         </div>
-      </div>
-
-      <div class="attn-list">
-        <template x-for="m in managers" :key="m.name">
-          <div class="attn-row mgr-row" :class="{idle:!m.attention}">
-            <div class="attn-head">
-              <span class="attn-name" x-text="m.name"></span>
-              <span class="mgr-tag" x-text="m.manager_of ? ('PM · ' + m.manager_of) : 'global manager'"></span>
-              <span class="attn-reason" x-show="m.attention" x-text="m.attention_reason || 'needs you'"></span>
-              <span class="badge" :data-s="m.activity" style="margin-left:var(--sp-1)">
-                <span class="d"></span><span x-text="m.activity"></span>
-              </span>
-              <span class="attn-spacer"></span>
-              <button class="mini ghost" type="button" @click="refreshAttnLog(m.name)" title="Re-fetch this agent's terminal">⟳</button>
-              <button class="mini ghost" type="button" @click="liveLog(m.name)" title="Open full live log">⤢ full log</button>
-            </div>
-
-            <pre class="attn-tail live" tabindex="0"
-                 :aria-label="'live terminal — focus to type into '+m.name"
-                 @keydown="handleTermKey($event, m.name)"
-                 x-text="attnLogs[m.name] || '(loading terminal…)'"></pre>
-            <div class="quick-keys" :aria-label="'quick keys for '+m.name">
-              <span class="qk-hint">Click the terminal above, then type — or tap:</span>
-              <template x-for="k in quickKeys" :key="k.label">
-                <button type="button" class="qk" :class="{danger:k.danger}"
-                        :title="k.title" @click="sendKeys(m.name, k.bytes)" x-text="k.label"></button>
-              </template>
-            </div>
-
-            <div class="attn-actions">
-              <div class="attn-action">
-                <label :for="'mgr-reply-'+m.name">Message (sent as keystrokes to <span x-text="m.name"></span>)</label>
-                <div class="attn-row-input">
-                  <input :id="'mgr-reply-'+m.name"
-                         :aria-label="'message '+m.name"
-                         :placeholder="'message '+m.name+'… (Enter to send)'"
-                         x-model="reply[m.name]"
-                         @keydown.enter="sendMsg(m.name)"
-                         :disabled="m.activity==='offline'">
-                  <button class="primary" type="button" @click="sendMsg(m.name)"
-                          :disabled="m.activity==='offline' || !(reply[m.name]||'').trim()"
-                          :title="m.activity==='offline' ? 'agent is offline' : ''">Send</button>
-                </div>
-                <div class="attn-hint">Free-form question, steering note, or answer.</div>
-              </div>
-
-              <div class="attn-action">
-                <label :for="'mgr-task-'+m.name">Queue a task for <span x-text="m.name"></span></label>
-                <div class="attn-row-input">
-                  <textarea :id="'mgr-task-'+m.name"
-                            :aria-label="'queue task for '+m.name"
-                            placeholder="Describe what to do… (Ctrl+Enter to queue)"
-                            x-model="attnTask[m.name]"
-                            @keydown.enter="if($event.ctrlKey||$event.metaKey){$event.preventDefault(); queueAttnTask(m.name);}"></textarea>
-                  <button class="primary" type="button" @click="queueAttnTask(m.name)"
-                          :disabled="!(attnTask[m.name]||'').trim()">Queue task</button>
-                </div>
-                <div class="attn-hint">Goes through the dispatcher; runs once the manager is idle.</div>
-              </div>
-            </div>
-          </div>
-        </template>
-      </div>
+      </template>
     </section>
   </div><!-- /attention tab -->
 
@@ -1710,8 +1651,12 @@ function fleet(){
     /* ---- reactive state ---- */
     agents: [], tasks: [], projects: [], docFiles: [], docScope: '__shared__',
     reply: {},                      // per-agent message-box text
-    attnLogs: {},                   // per-agent terminal tail for the Attention tab
     attnTask: {},                   // per-agent task draft for the Attention tab
+    // ---- live-terminal (Attention tab) ----
+    termAgent: '',                  // currently-selected agent for the live terminal
+    termText: '',                   // latest rendered screen for termAgent
+    termStatus: 'connecting',       // 'live' | 'connecting' | 'offline'
+    _termES: null,                  // active EventSource (non-reactive handle)
     // modal-backed forms (projects & groups)
     newProject: { name:'', path:'', description:'', dashboard_url:'' },
     newAgent: { name:'', role:'', project_dir:'', project:'' },
@@ -1751,18 +1696,15 @@ function fleet(){
       else if(h==='history') this.tab = 'history';
       this.loadMsgs();
       this.refreshWhoami();
-      this.refresh().then(()=>this.refreshDocs());
+      this.refresh().then(()=>{ this.refreshDocs(); if(this.tab==='attention') this.ensureTerm(); });
       if(this.tab==='connectors') this.refreshConnectors();
       setInterval(()=>this.refresh(), 2500);
-      // Faster terminal refresh while the Attention tab is visible — the user
-      // is interacting key-by-key with a live PTY, so a 1s lag still feels
-      // sluggish. 300 ms gives a fluid feel; the in-flight guard in
-      // refreshAttnLog keeps requests from piling up.
+      // Keep the live terminal connected while the Attention tab is open; the
+      // EventSource pushes screen updates, so this only reopens a dropped stream.
       setInterval(()=>{
         if(this.tab !== 'attention') return;
-        if(!this.attnWorkers.length && !this.managers.length) return;
-        this.refreshAttnLogs();
-      }, 300);
+        this.ensureTerm();
+      }, 3000);
       setInterval(()=>{ this.now = Date.now();
         this.pollSecs = Math.max(0, Math.round((Date.now()-this.lastPollAt)/1000)); }, 1000);
       window.addEventListener('keydown', e=>this.onKey(e));
@@ -1777,7 +1719,8 @@ function fleet(){
       const h = t==='topology' ? '#connections' : (t==='activity' ? '#activity' : (t==='attention' ? '#attention' : (t==='projects' ? '#projects' : (t==='connectors' ? '#connectors' : (t==='history' ? '#history' : '')))));
       history.replaceState(null, '', h || location.pathname + location.search);
       if(t==='connectors') this.refreshConnectors();
-      if(t==='attention') this.refreshAttnLogs();
+      if(t==='attention') this.ensureTerm();
+      else this.closeTerm();
     },
 
     /* ---- helpers ---- */
@@ -1977,14 +1920,6 @@ function fleet(){
     // Same set as attnNames but carrying the human-readable attention_reason
     // (T-05) so the attention bar can show "alice (no heartbeat for 12m), bob".
     get attnAgents(){ return this.agents.filter(a=>a.attention).map(a=>({name:a.name, attention_reason:a.attention_reason||""})); },
-    // Attention tab splits flagged agents from the always-on Managers section
-    // so a flagged PM only appears once (in Managers, with its needs-you
-    // badge), and the "Needs you" rail at top stays scoped to workers.
-    get attnWorkers(){
-      return this.agents
-        .filter(a => a.attention && !a.manager_of && !this.isManager(a))
-        .map(a => ({name:a.name, attention_reason:a.attention_reason||""}));
-    },
     // Always-on chat targets: every project PM (manager_of set) plus the
     // global manager (orch / role contains "manager"). Sorted PMs first, then
     // the global manager, so a multi-project user sees their PMs grouped.
@@ -1997,6 +1932,22 @@ function fleet(){
           if(xp !== yp) return xp - yp;
           return (x.manager_of||x.name).localeCompare(y.manager_of||y.name);
         });
+    },
+    // Managers first (PMs then global), then plain workers A–Z, for the selector.
+    get termManagers(){ return this.managers; },
+    get termWorkers(){
+      return this.agents
+        .filter(a => !(a.manager_of || this.isManager(a)))
+        .slice()
+        .sort((x,y) => x.name.localeCompare(y.name));
+    },
+    // Dropdown label: status glyph + name (+ PM tag). 🔴 needs-you, ● busy,
+    // ○ idle, ⨯ offline.
+    termLabel(a){
+      const mark = a.attention ? '🔴'
+        : (a.activity==='busy' ? '●' : (a.activity==='idle' ? '○' : '⨯'));
+      const tag = a.manager_of ? ('  ·  PM '+a.manager_of) : '';
+      return mark+' '+a.name+tag;
     },
     get failedTasks(){ return this.tasks.filter(t=>t.status==='failed'); },
     // The manager is whichever agent has a coordinator role (or is named 'orch').
@@ -2096,11 +2047,7 @@ function fleet(){
         this.projects = s.projects || [];
         this.connected = true;
         this.booted = true;
-        // Keep the Attention tab's terminal tails fresh on the same cadence as
-        // /api/state — only when the tab is actually visible to avoid wasting
-        // /api/logs calls when nobody is reading them. Triggers whenever there
-        // are workers needing attention OR managers (always-on chat) to refresh.
-        if(this.tab==='attention' && (this.attnWorkers.length || this.managers.length)) this.refreshAttnLogs();
+        if(this.tab==='attention') this.ensureTerm();
       }catch(e){ this.connected = false; }
     },
 
@@ -2278,10 +2225,6 @@ function fleet(){
       if(r.error){ this.toast(r.error,'err'); return; }
       this.recordMsg(name, message);
       this.reply[name] = ''; this.toast('Sent to '+name);
-      // When the user just answered a prompt from the Attention tab, the
-      // freshest terminal tail should reflect their input — refresh it so the
-      // row updates without waiting for the next 2.5s poll.
-      if(this.tab==='attention') this.refreshAttnLog(name);
       this.refresh();
     },
 
@@ -2331,10 +2274,6 @@ function fleet(){
       ev.preventDefault();
       this.sendKeys(name, bytes);
     },
-    // Base64-encode the UTF-8 bytes (handles any printable char + the
-    // hard-coded VT escapes) and POST them to the worker's PTY. After each
-    // burst we re-pull the terminal so the user sees their input reflected
-    // without waiting for the next 1s poll tick.
     async sendKeys(name, bytesString){
       if(!bytesString) return;
       let b64;
@@ -2345,38 +2284,58 @@ function fleet(){
           headers:{'Content-Type':'application/json'},
           body: JSON.stringify({name, keys_b64: b64})});
         if(r && r.error){ this.toast(r.error,'err'); return; }
-        this.refreshAttnLog(name);
       }catch(e){ this.toast('keys send failed','err'); }
     },
 
-    // In-flight /api/logs requests, keyed by agent name. Without this the
-    // 300 ms poll + every-keystroke refresh would let requests pile up and
-    // arrive out of order, making the terminal flicker between an old and
-    // new screen. Skip whenever a fetch is already mid-flight.
-    _attnInflight: new Set(),
-    // Pull last ~80 lines of an agent's terminal so the operator can read the
-    // question / suggestion in context before answering or queueing a task.
-    async refreshAttnLog(name){
-      if(this._attnInflight.has(name)) return;
-      this._attnInflight.add(name);
-      try{
-        const r = await this.api('/api/logs?agent='+encodeURIComponent(name)+'&lines=80');
-        const txt = (r && r.text) || '(empty)';
-        // Only assign when the content actually changes — Alpine still
-        // re-renders identical strings, so the pre's scroll position would
-        // jump every tick. Comparing first keeps the cursor where the
-        // operator is reading.
-        if(this.attnLogs[name] !== txt) this.attnLogs[name] = txt;
-      }catch(e){ this.attnLogs[name] = '(failed to fetch terminal)'; }
-      finally{ this._attnInflight.delete(name); }
+    // Choose which agent to show when none is selected yet: last-viewed
+    // (localStorage) -> first agent needing attention -> first manager -> first
+    // agent overall.
+    pickDefaultTerm(){
+      const names = this.agents.map(a=>a.name);
+      let pick = null;
+      try{ const s = localStorage.getItem('fleet.termAgent'); if(s && names.includes(s)) pick = s; }catch(e){}
+      if(!pick){ const att = this.agents.find(a=>a.attention); if(att) pick = att.name; }
+      if(!pick && this.managers.length) pick = this.managers[0].name;
+      if(!pick && this.agents.length) pick = this.agents[0].name;
+      this.termAgent = pick || '';
     },
-    async refreshAttnLogs(){
-      // Workers needing attention + every manager (always-on chat). Deduped so
-      // a flagged PM doesn't get its terminal fetched twice per poll.
-      const names = new Set();
-      for(const a of this.attnWorkers) names.add(a.name);
-      for(const m of this.managers) names.add(m.name);
-      await Promise.all([...names].map(n=>this.refreshAttnLog(n)));
+    // Ensure a terminal is selected and streaming (called on tab open + each poll).
+    ensureTerm(){
+      if(!this.agents.length) return;                       // wait for first state load
+      if(!this.termAgent || !this.agents.find(a=>a.name===this.termAgent)) this.pickDefaultTerm();
+      if(this.termAgent && (!this._termES || this._termES.readyState===2)) this.openTerm();
+    },
+    closeTerm(){
+      if(this._termES){ try{ this._termES.close(); }catch(e){} this._termES = null; }
+    },
+    // One-shot capture so the terminal paints instantly while the SSE stream
+    // connects (avoids a blank flash on open / agent switch).
+    async refreshTermOnce(){
+      const name = this.termAgent;
+      try{
+        const r = await this.api('/api/logs?agent='+encodeURIComponent(name)+'&lines=200');
+        if(this.termAgent===name && r && r.text!=null && this.termStatus!=='live') this.termText = r.text;
+      }catch(e){}
+    },
+    openTerm(){
+      this.closeTerm();
+      if(!this.termAgent) return;
+      try{ localStorage.setItem('fleet.termAgent', this.termAgent); }catch(e){}
+      this.termStatus = 'connecting';
+      this.termText = '(connecting…)';
+      this.refreshTermOnce();
+      const name = this.termAgent;
+      const es = new EventSource('/api/agent/stream?agent='+encodeURIComponent(name));
+      this._termES = es;
+      es.onmessage = (e)=>{
+        if(this.termAgent !== name) return;                 // a switch raced us
+        try{
+          const d = JSON.parse(e.data);
+          if(d.screen != null){ this.termText = d.screen; this.termStatus = 'live'; }
+          else if(d.status === 'offline'){ this.termStatus = 'offline'; }
+        }catch(_){}
+      };
+      es.onerror = ()=>{ this.termStatus = 'connecting'; }; // EventSource auto-retries
     },
     // Queue a brand-new task for an agent from the Attention tab. Same endpoint
     // as the sidebar composer — keeping a single server entry point means there
