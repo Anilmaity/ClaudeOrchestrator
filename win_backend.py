@@ -68,6 +68,8 @@ def _read_frame(rfile):
         if not chunk:
             break
         buf += chunk
+    if len(buf) < n:
+        return None        # EOF mid-frame: the stream is broken, end it
     return bytes(buf)
 
 
@@ -200,6 +202,7 @@ class WinBackend(Backend):
             sock = socket.create_connection(("127.0.0.1", port), timeout=3.0)
         except OSError:
             return
+        rfile = None
         try:
             sock.sendall(b"STREAM\n")
             # Generous read timeout: the host heartbeats every ~15s, so 40s of
@@ -210,6 +213,13 @@ class WinBackend(Backend):
         except OSError:
             return
         finally:
+            # Close rfile first: makefile() holds a SocketIO reference, so
+            # sock.close() alone won't release the fd until rfile is GC'd.
+            if rfile is not None:
+                try:
+                    rfile.close()
+                except OSError:
+                    pass
             try:
                 sock.close()
             except OSError:
