@@ -35,7 +35,7 @@ HEARTBEAT_INTERVAL_SECS = 15
 STREAM_HEARTBEAT_SECS = 15.0
 
 
-def _offer(q: "queue.Queue", item) -> None:
+def _offer(q: queue.Queue, item: str) -> None:
     """Put ``item`` on ``q``; if full, drop the oldest so a slow consumer can
     never block the producer (the pump thread must never stall)."""
     try:
@@ -53,7 +53,9 @@ def _offer(q: "queue.Queue", item) -> None:
 
 def _write_frame(wfile, payload: bytes) -> None:
     """Write one length-prefixed frame: ``<len>\n`` then the bytes. A zero-length
-    payload (``0\n``) is a heartbeat."""
+    payload (``0\n``) is a heartbeat. Writes the length line and payload in two
+    calls; the caller MUST ``wfile.flush()`` afterwards on a streaming connection
+    or the frame can sit in the buffer and never reach the client."""
     wfile.write(str(len(payload)).encode() + b"\n")
     if payload:
         wfile.write(payload)
@@ -207,16 +209,20 @@ class AgentHost:
             self._worker_busy = False
             self._write_worker_status(state="done")
 
-    def subscribe(self) -> "queue.Queue":
+    def subscribe(self) -> queue.Queue:
         """Register a live-screen subscriber and seed it with the current screen
         so a freshly-connected client paints immediately. Returns the queue."""
         q: queue.Queue = queue.Queue(maxsize=8)
         with self._subs_lock:
             self._subs.append(q)
+        # Seed outside the lock: a concurrent publish_screen may race this,
+        # producing a benign duplicate initial frame, but the subscriber never
+        # misses a screen. Keeping it out of the lock also avoids holding it
+        # across screen.text() rendering.
         _offer(q, self.screen.text())
         return q
 
-    def unsubscribe(self, q: "queue.Queue") -> None:
+    def unsubscribe(self, q: queue.Queue) -> None:
         with self._subs_lock:
             try:
                 self._subs.remove(q)
