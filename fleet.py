@@ -1461,6 +1461,32 @@ def build_state() -> dict:
     return {"agents": agents, "tasks": tasks, "projects": load_projects(CONFIG)}
 
 
+def _sse_data(obj) -> bytes:
+    """One SSE ``data:`` event carrying a JSON object. JSON-encoding keeps the
+    (multi-line) screen text on a single SSE data line."""
+    return b"data: " + json.dumps(obj).encode("utf-8") + b"\n\n"
+
+
+def _sse_ping() -> bytes:
+    """An SSE comment line — keeps the connection (and the tunnel) warm."""
+    return b": ping\n\n"
+
+
+def stream_agent_screen(write, backend, name) -> None:
+    """Pump ``backend.stream_screen(name)`` to ``write`` as SSE. A HEARTBEAT
+    sentinel becomes an ``: ping`` comment; a screen string becomes a data
+    event. Returns quietly when the client disconnects (write raises)."""
+    from backend import HEARTBEAT
+    try:
+        for item in backend.stream_screen(name):
+            if item is HEARTBEAT:
+                write(_sse_ping())
+            else:
+                write(_sse_data({"screen": item}))
+    except (BrokenPipeError, ConnectionResetError, OSError):
+        return
+
+
 class Handler(BaseHTTPRequestHandler):
     # Paths that bypass the auth gate. ``/logout`` must answer with its own 401
     # (to invalidate the browser's cached Basic credentials) so it cannot be
@@ -1584,6 +1610,30 @@ class Handler(BaseHTTPRequestHandler):
                 if not orch._window_exists(name):
                     return self._json({"text": "(agent offline)"})
                 self._json({"text": orch._capture(name, lines)})
+            elif u.path == "/api/agent/stream":
+                q = parse_qs(u.query)
+                name = (q.get("agent") or [""])[0]
+                if name not in {a["name"] for a in AGENTS}:
+                    return self._json({"error": "unknown agent"}, 400)
+                # Switch to a streaming response; we own the socket from here.
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Connection", "keep-alive")
+                self.send_header("X-Accel-Buffering", "no")
+                self.end_headers()
+                if not orch._window_exists(name):
+                    try:
+                        self.wfile.write(_sse_data({"status": "offline"}))
+                        self.wfile.flush()
+                    except OSError:
+                        pass
+                    return
+                def _w(b):
+                    self.wfile.write(b)
+                    self.wfile.flush()
+                stream_agent_screen(_w, orch._backend, name)
+                return
             elif u.path == "/api/task/log":
                 q = parse_qs(u.query)
                 tid = (q.get("id") or [""])[0]
