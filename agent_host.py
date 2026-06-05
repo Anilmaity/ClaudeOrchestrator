@@ -118,6 +118,8 @@ class _Handler(socketserver.StreamRequestHandler):
                         continue
                     _write_frame(self.wfile, txt.encode("utf-8", "replace"))
                     self.wfile.flush()
+            # Covers both _write_frame and flush() in either path: a disconnected
+            # client makes the next write/flush raise, which ends the stream.
             except (BrokenPipeError, ConnectionResetError, OSError):
                 pass
             finally:

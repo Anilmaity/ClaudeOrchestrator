@@ -165,6 +165,7 @@ def test_stream_pushes_initial_and_changed_screen():
     port = host.start_server()
     try:
         s = socket.create_connection(("127.0.0.1", port), timeout=2)
+        s.settimeout(2)        # read timeout: a missing frame fails loudly, not hangs
         s.sendall(b"STREAM\n")
         rfile = s.makefile("rb")
         initial = _read_frame(rfile).decode()
