@@ -12,3 +12,12 @@ fleet_docs/
 
 # Git worktrees (isolated workspaces)
 .worktrees/
+
+# Operational task briefs (per-deployment data, not part of the product)
+/briefs/
+
+# Local screenshots / scratch captures
+/*.png
+
+# Playwright MCP console logs
+.playwright-mcp/
