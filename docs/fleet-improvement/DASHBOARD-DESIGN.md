@@ -59,6 +59,11 @@ Confirmed from `fleet.py::build_state()` and the handlers. **Do not invent field
 }
 ```
 
+> **Projects & Groups (feature t-0001)** extends `/api/state` and adds four mutation
+> endpoints — see **§14** for the full contract (a top-level `projects` array, a
+> per-agent `project` field, and `POST /api/projects`, `/api/projects/delete`,
+> `/api/agents`, `/api/agent/group`).
+
 Other endpoints (unchanged):
 
 | Call | Request | Response |
@@ -718,4 +723,272 @@ the modifier combos). Show a one-line hint of the key shortcuts in the header or
 - [ ] All API strings HTML-escaped; only same-origin endpoints used; single file, no deps.
 - [ ] `prefers-reduced-motion` honored; status conveyed by color **and** text/glyph.
 - [ ] `node --check` on the extracted script passes (if Node present); no `git` run.
+
+---
+
+## 14. Projects & Groups API contract (feature t-0001)
+
+The durable, implement-from-this-alone reference for the **Projects & Groups** feature.
+It mirrors `docs/fleet-improvement/tasks/projects-groups-contract.md` — the single source
+of truth — so a client can be built from this section alone. A **project** is a named
+group; an agent is either **assigned to a project** (grouped) or **ungrouped**. Both
+additions are optional and fully backward compatible with today's `fleet.json` (no
+`projects` key, agents with no `project` field).
+
+### 14.1 `fleet.json` schema (additions)
+
+Two additions, both optional and backward compatible:
+
+```json
+{
+  "projects": [
+    { "name": "core", "path": "C:/path/optional", "description": "optional text" }
+  ],
+  "agents": [
+    { "name": "backend", "role": "...", "project_dir": "C:/...", "project": "core" }
+  ]
+}
 ```
+
+- **Top-level `"projects"`** — array of `{ name, path?, description? }`. Missing key ⇒ `[]`.
+  - `name` must match the existing agent-name rule (`orch.NAME_RE`) and be unique among
+    projects.
+  - `path` is optional. If non-empty it is stored as given (after `expanduser`); it is a
+    convenience default for new agents, **not** required to be an existing dir.
+  - `description` is optional free text.
+- **Per-agent `"project"`** — a string referencing a project `name`. Missing/empty ⇒
+  ungrouped (`""`). When the config is loaded, every agent dict MUST have a `"project"`
+  key (default `""`). If an agent references a project that no longer exists, treat it as
+  ungrouped at render time (do not crash).
+
+### 14.2 `GET /api/state` (additions to §2)
+
+Extends the shape documented in §2 — everything else there is unchanged:
+
+- A top-level `"projects"` key: the list from `fleet.json`, each `{ name, path, description }`
+  with `path` / `description` defaulting to `""`.
+- A `"project"` field on every agent object in the `"agents"` array (the agent's project
+  name, or `""`).
+
+### 14.3 Mutation endpoints
+
+All POST bodies are JSON; all responses are JSON via the existing `self._json(...)` helper.
+Validation errors return **HTTP 400** `{"error": "..."}`.
+
+| Call | Request body | Success response |
+|---|---|---|
+| `POST /api/projects` | `{ "name": str, "path"?: str, "description"?: str }` | `{ "ok": true, "name": <name> }` |
+| `POST /api/projects/delete` | `{ "name": str }` | `{ "ok": true }` (unknown name ⇒ `{ "ok": false }`) |
+| `POST /api/agents` | `{ "name": str, "role"?: str, "project_dir": str, "project"?: str }` | `{ "ok": true, "name": <name> }` |
+| `POST /api/agent/group` | `{ "name": str, "project": str }` | `{ "ok": true }` |
+
+**`POST /api/projects` — create a project**
+- 400 if `name` missing/invalid (`orch.NAME_RE`) or already a project.
+- On success: `{ "ok": true, "name": <name> }`.
+
+**`POST /api/projects/delete` — delete a project**
+- Removes the project **and** sets `project` to `""` on any agent that belonged to it
+  (ungroup them; do **not** delete those agents).
+- On success: `{ "ok": true }`. Unknown name ⇒ `{ "ok": false }` (not an error / not a 400).
+
+**`POST /api/agents` — create a new agent (add to `fleet.json`)**
+- 400 if `name` missing/invalid (`orch.NAME_RE`) or duplicates an existing agent.
+- 400 if `project_dir` is missing or not an existing directory
+  (`Path(project_dir).expanduser().is_dir()`), with message `"not a directory: <path>"`.
+- 400 if `project` is non-empty but not an existing project (`"unknown project"`).
+- Store `project_dir` resolved exactly like the existing config loader:
+  `str(Path(project_dir).expanduser().resolve())`.
+- On success: `{ "ok": true, "name": <name> }`. The running dispatcher hot-reloads
+  `fleet.json` every tick and spawns the new agent's terminal automatically — callers do
+  **not** spawn it themselves.
+
+**`POST /api/agent/group` — move an agent into / out of a project**
+- Body `{ "name": str, "project": str }`; `project: ""` ⇒ ungroup.
+- 400 if `name` is not an existing agent (`"unknown agent"`).
+- 400 if `project` is non-empty but not an existing project (`"unknown project"`).
+- On success: `{ "ok": true }`. No restart needed — grouping does not change `project_dir`.
+
+### 14.4 Persistence (atomic writes)
+
+Every mutation of `fleet.json` MUST be atomic and UTF-8, exactly like the existing
+`_set_agent_path()` in `fleet.py`: write to a `.tmp` sibling, then `tmp.replace(CONFIG)`,
+with `encoding="utf-8"`, `ensure_ascii=False`, `indent=2`. After writing, refresh the
+module-level `AGENTS` (call `load_config()`) so the dashboard reflects the change on the
+next poll. The dispatcher already hot-reloads the file each tick.
+
+### 14.5 Group actions (v2 — feature t-0005)
+
+Two endpoints that make a group *actionable* — they act on a whole project at once. Same
+conventions as §14.3 (JSON in/out via `self._json(...)`; validation errors are
+**HTTP 400** `{"error": "..."}`). The v1 schema, `/api/state` shape, and v1 endpoints
+above are unchanged.
+
+| Call | Request body | Success response |
+|---|---|---|
+| `POST /api/tasks/group` | `{ "project": str, "description": str }` | `{ "ok": true, "ids": [<task ids>], "count": <n> }` |
+| `POST /api/projects/rename` | `{ "name": str, "new_name": str }` | `{ "ok": true, "name": <new_name> }` |
+
+**`POST /api/tasks/group` — queue one task to every agent in a project**
+- Queues `description` as a task for each agent whose `project` matches `project`
+  (member order, FIFO), reusing the normal per-agent task queue (the existing
+  `add_task(agent, description)` path).
+- 400 `{"error": "empty task"}` if `description` is blank.
+- 400 `{"error": "unknown project"}` if `project` is not an existing project.
+- 400 `{"error": "no agents in project"}` if the project has no member agents.
+- On success: `{ "ok": true, "ids": [<task ids>], "count": <n> }` — `ids` are the newly
+  created task ids in member order; `count` is their number.
+
+**`POST /api/projects/rename` — rename a project**
+- Renames the project and updates every member agent's `project` from `name` to
+  `new_name`, persisted with the atomic write of §14.4. No `project_dir` changes, so no
+  agent restart is needed.
+- 400 `{"error": "invalid name"}` if `new_name` fails `orch.NAME_RE`.
+- 400 `{"error": "unknown project"}` if `name` is not an existing project.
+- 400 `{"error": "project exists"}` if `new_name` differs from `name` but already names an
+  existing project.
+- 500 `{"error": "could not update fleet.json"}` if the config write fails (`OSError`).
+- On success: `{ "ok": true, "name": <new_name> }`.
+
+> Both act on **real** projects only. The dashboard's "Ungrouped" bucket is not a project
+> and exposes none of these group actions.
+
+### 14.6 The Projects tab (v3 — feature t-0007)
+
+The dashboard's tab bar — **Dashboard / Activity / Connections** — gains a fourth tab,
+**🗂 Projects** (added after Connections; URL hash `#projects`, restored on load). It is
+the single home for all project management; the Dashboard tab keeps its inline grouping
+controls, so this tab is purely additive.
+
+What the Projects tab renders:
+- A **Create project** control: name + optional path + description → `POST /api/projects`.
+- One **project card** per `projects` entry, showing its `name`, `path`, `description`,
+  and its **member agents** (agents whose `project === name`) with live status and a
+  member count. Per card:
+  - **Rename** → `POST /api/projects/rename` `{name, new_name}` (§14.5).
+  - **Edit** path / description → `POST /api/projects/update` (below).
+  - **Delete** → `POST /api/projects/delete` `{name}` — ungroups members, does not delete
+    them (§14.3).
+  - **Queue task to group** → `POST /api/tasks/group` `{project, description}` (§14.5).
+  - **Add an existing agent** → `POST /api/agent/group` `{name, project}` (§14.3).
+  - **Create a new agent in this project** → `POST /api/agents`
+    `{name, role, project_dir, project}`, defaulting `project_dir` to the project's `path`
+    (§14.3).
+  - Per member: **remove from project** (`POST /api/agent/group` `{name, project: ""}`)
+    or move it to another project.
+- An **Ungrouped agents** block (agents with `project === ""`), each with an
+  "assign to project" select → `POST /api/agent/group`.
+- A friendly **empty state** when there are no projects yet.
+
+**`POST /api/projects/update` — edit a project's path / description**
+
+| Call | Request body | Success response |
+|---|---|---|
+| `POST /api/projects/update` | `{ "name": str, "path"?: str, "description"?: str }` | `{ "ok": true, "name": <name> }` |
+
+Wired like the other project handlers (`ValueError` → 400 `{"error": str(e)}`,
+`OSError` → 500), and persisted with the atomic write of §14.4.
+
+- `path`: if non-empty, stored as `str(Path(path).expanduser())`; **empty clears it (`""`)**.
+- `description`: stored as given; **empty clears it (`""`)**.
+- 400 `{"error": "unknown project"}` if `name` is not an existing project.
+- 500 `{"error": "could not update fleet.json"}` if the config write fails (`OSError`).
+- On success: `{ "ok": true, "name": <name> }`.
+
+### 14.7 Project managers (feature t-0009)
+
+Builds on the Projects feature (§14.6): **every project always has exactly one
+project-manager (PM) agent** that coordinates the project's worker agents. A PM is
+an ordinary `fleet.json` agent entry plus one extra field; it is created, renamed,
+and removed automatically alongside its project. This layer is additive — the v1/v2/v3
+schema, `/api/state` shape, and endpoints above are unchanged.
+
+#### 14.7.1 The `manager_of` agent field
+
+A PM agent is a normal agent with **one extra field**, `manager_of`:
+
+```json
+{
+  "name": "<project>-pm",
+  "role": "<manager role text>",
+  "project_dir": "<the orchestrator directory>",
+  "manager_of": "<project name>"
+}
+```
+
+- **`manager_of`** — the project this agent manages. Non-empty **only** on PM
+  agents; a normal worker agent has `manager_of == ""`.
+- A PM is **not** a worker member of the project it manages, so its worker
+  `project` field stays `""`. This is deliberate: it keeps PMs out of group-task
+  fan-out (`add_group_tasks` filters on `project ==`, never `manager_of`).
+- **Name convention:** `_pm_name(project) == f"{project}-pm"`. Project names pass
+  `orch.NAME_RE`, so `<project>-pm` is always a valid agent name.
+- **`project_dir`:** the orchestrator directory itself (`str(fleet.HERE)`), because
+  the PM coordinates by running the `./fleet` / `./orch` CLIs, which live there.
+
+Like `project`, `manager_of` is carried through `load_config()` (default `""`) and
+emitted on every agent in `build_state()`:
+
+- **`fleet.json` schema:** each agent object MAY carry a `"manager_of"` string;
+  missing/empty ⇒ `""` (an ordinary worker).
+- **`GET /api/state` (additions to §2 / §14.2):** every agent object in the
+  `"agents"` array gains a `"manager_of"` field (the managed project name, or `""`).
+
+#### 14.7.2 Backend (`fleet.py`)
+
+Two helpers and one public function:
+
+- `_pm_name(project) -> str` → `f"{project}-pm"`.
+- `_pm_role(project) -> str` → the manager role string, with `<P>` replaced by the
+  project name. (The PM is instructed to coordinate only its own project's members,
+  to assign work via `./fleet add`, and to never run `git`, `./fleet up`/`down`,
+  `./orch stop --all`, or manage agents outside its project.)
+- **`ensure_project_managers() -> list[str]`** — idempotent backfill. For every
+  project with no PM (no agent whose `manager_of == project`), append one
+  (`name=_pm_name(p)`, `role=_pm_role(p)`, `project_dir=str(HERE)`, `manager_of=p`).
+  Persists via `_write_config(data)` **only if** something was added; returns the
+  list of PM names created. A second call adds nothing and returns `[]`. If an agent
+  with the PM name already exists, it is left untouched (no crash on name clash).
+
+PM lifecycle is wired into the existing project mutators (§14.3 / §14.5), each still
+a single atomic `_write_config` (§14.4):
+
+| Mutator | PM behavior (in addition to the project change) |
+|---|---|
+| `create_project(name, …)` | Also append the project's PM agent, unless an agent named `_pm_name(name)` already exists. |
+| `delete_project(name)` | Also remove the PM agent (the one with `manager_of == name`). Member ungrouping is unchanged. |
+| `rename_project(name, new_name)` | Also rename the PM (`manager_of == name`) to `_pm_name(new_name)`, set its `manager_of = new_name`, and regenerate its `role` via `_pm_role(new_name)`. A no-op rename (`new_name == name`) stays a no-op. |
+
+These hook into the same `/api/projects`, `/api/projects/delete`, and
+`/api/projects/rename` endpoints — no new mutation endpoint is added for PMs; they
+are managed as a side effect of the project they belong to.
+
+#### 14.7.3 CLI / startup
+
+- **`cmd_up`:** calls `ensure_project_managers()` immediately after
+  `AGENTS = load_config()` (before spawning), so every project's PM exists and gets
+  a terminal on start.
+- **`./fleet sync-pms`** (new subcommand): calls `ensure_project_managers()` and
+  prints the PM names it created (or "nothing to do"). This backfills PMs into a
+  **running** fleet without a restart — the live dispatcher hot-reloads `fleet.json`
+  and spawns the new PM terminals on its next tick.
+
+#### 14.7.4 Frontend (`dashboard.html`)
+
+Read the PM from `/api/state`: a project's PM is the agent whose
+`manager_of === project.name`.
+
+- On each **project card** (Projects tab, §14.6): show a distinct **"Project
+  manager"** row/badge for that project's PM — its name + live `activity` status —
+  visually separated from the worker member list. The row offers:
+  - **Queue task to manager** → `POST /api/tasks` `{ agent: <pmName>, description }`
+    (reuse the existing task-queue plumbing + toast).
+  - **Send / steer the PM** → `POST /api/agent/send` `{ name: <pmName>, message }`,
+    matching how members are steered today.
+- The **worker member list** stays "agents with `project === name`". The PM's
+  `project` is `""`, so it never appears there — surface it only in the dedicated
+  manager row.
+- Wherever agents are listed with a role/status (e.g. the Dashboard tab), give any
+  agent with a non-empty `manager_of` a small **"PM"** / manager badge so it is
+  recognizable. Keep it additive — do not break v1/v2/v3 behavior.
+- A project with no PM yet (shouldn't normally happen once the backend lands, but be
+  defensive) simply shows no manager row.
