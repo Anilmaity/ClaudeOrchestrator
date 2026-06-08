@@ -96,11 +96,28 @@ def test_stuck_reason_terminal_silence_fallback(tmp_path, monkeypatch):
 
 def test_record_terminal_activity_only_stamps_on_change(tmp_path, monkeypatch):
     monkeypatch.setattr(fleet, "_TERMINAL_ACTIVITY", {})
-    fleet._record_terminal_activity("alice", "screen-a")
+
+    # datetime.now() resolution is ~15ms on Windows, so two real calls a few
+    # microseconds apart return the *same* value. Drive a deterministic,
+    # strictly-advancing clock so the "stamp only on a content change" contract
+    # is testable on every platform (it only advances on the two change calls).
+    ticks = iter([
+        datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc),
+        datetime(2026, 1, 1, 0, 0, 1, tzinfo=timezone.utc),
+    ])
+
+    class _Clock:
+        @staticmethod
+        def now(tz=None):
+            return next(ticks)
+
+    monkeypatch.setattr(fleet, "datetime", _Clock)
+
+    fleet._record_terminal_activity("alice", "screen-a")   # change -> tick 0
     first = fleet._TERMINAL_ACTIVITY["alice"][1]
-    fleet._record_terminal_activity("alice", "screen-a")
+    fleet._record_terminal_activity("alice", "screen-a")   # no change -> no now()
     assert fleet._TERMINAL_ACTIVITY["alice"][1] == first   # unchanged stamp
-    fleet._record_terminal_activity("alice", "screen-b")
+    fleet._record_terminal_activity("alice", "screen-b")   # change -> tick 1
     assert fleet._TERMINAL_ACTIVITY["alice"][1] != first   # advanced
 
 

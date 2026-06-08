@@ -106,6 +106,12 @@ def test_busy_task_survives_single_missed_ping(tmp_path, monkeypatch):
 
 def test_sustained_gone_fails_task(tmp_path, monkeypatch):
     disp = _setup(tmp_path, monkeypatch, [], alive=False)
+    # T-06: a failure now retries first. Force max_retries=0 (via the loader
+    # the dispatcher re-reads each tick) so the test still exercises the
+    # immediate-failure contract it originally asserted.
+    import rate_governor
+    monkeypatch.setattr(rate_governor, "load_rate_limit",
+                        lambda _p: {**rate_governor._merge(None), "max_retries": 0})
     for _ in range(fleet.CONFIRM_GONE):
         disp.tick()
     assert _status(tmp_path) == "failed"
@@ -152,6 +158,12 @@ def test_watchdog_fails_overrun_task_and_frees_agent(tmp_path, monkeypatch):
     # agent then dispatches to running once the agent is ready.
     monkeypatch.setattr(fleet, "TASK_TIMEOUT_SECS", 1)
     disp = _setup(tmp_path, monkeypatch, ["esc to interrupt", "shift+tab to cycle"])
+    # T-06: the watchdog failure now retries first. Force max_retries=0 (via
+    # the loader the dispatcher re-reads each tick) so the original
+    # "watchdog -> failed -> next pending dispatches" contract holds.
+    import rate_governor
+    monkeypatch.setattr(rate_governor, "load_rate_limit",
+                        lambda _p: {**rate_governor._merge(None), "max_retries": 0})
     d = fleet._load_tasks()
     d["tasks"][0]["started_at"] = "2000-01-01T00:00:00Z"   # long overrun
     d["tasks"].append({
